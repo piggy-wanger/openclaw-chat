@@ -1,31 +1,91 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import {
+  ChevronLeft,
+  Wifi,
+  Brain,
+  Palette,
+  MessageSquare,
+  Key,
+  Info,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SettingsForm } from "@/components/settings/SettingsForm";
+import { SettingsForm, type SettingsCategory } from "@/components/settings/SettingsForm";
 import { SessionProvider } from "@/hooks/useSession";
+import { cn } from "@/lib/utils";
+
+const NAV_ITEMS: { key: SettingsCategory; label: string; icon: typeof Wifi }[] = [
+  { key: "connection", label: "连接", icon: Wifi },
+  { key: "model", label: "模型", icon: Brain },
+  { key: "appearance", label: "外观", icon: Palette },
+  { key: "session", label: "会话", icon: MessageSquare },
+  { key: "api", label: "API", icon: Key },
+  { key: "about", label: "关于", icon: Info },
+];
 
 export default function SettingsPage() {
+  const [activeCategory, setActiveCategory] = useState<SettingsCategory>("connection");
+
   return (
-    <div className="min-h-screen bg-zinc-950">
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
+    <div className="min-h-screen bg-zinc-950 flex flex-col">
+      {/* Header */}
+      <div className="flex items-center gap-4 px-6 py-4 border-b border-zinc-800">
         <Link href="/" aria-label="返回主页">
           <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-white">
             <ChevronLeft className="h-5 w-5" />
           </Button>
         </Link>
-          <h1 className="text-2xl font-bold text-white">设置</h1>
-        </div>
+        <h1 className="text-xl font-bold text-white">设置</h1>
+      </div>
 
-        {/* Settings Form */}
-        <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-6">
-          <SessionProvider>
-            <SettingsForm />
-          </SessionProvider>
-        </div>
+      {/* Body: Sidebar + Content */}
+      <div className="flex flex-1 overflow-hidden">
+        <SessionProvider>
+          {/* Sidebar Navigation */}
+          <nav className="hidden md:flex flex-col w-[200px] min-w-[200px] border-r border-zinc-800 bg-zinc-950 py-4">
+            {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setActiveCategory(key)}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors text-left",
+                  activeCategory === key
+                    ? "text-white bg-zinc-800 border-r-2 border-blue-500"
+                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
+              </button>
+            ))}
+          </nav>
+
+          {/* Mobile Nav: horizontal tabs */}
+          <div className="flex md:hidden border-b border-zinc-800 overflow-x-auto">
+            {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setActiveCategory(key)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors",
+                  activeCategory === key
+                    ? "text-white border-blue-500"
+                    : "text-zinc-400 border-transparent hover:text-zinc-200"
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Content Area */}
+          <div className="flex-1 overflow-y-auto">
+            <SettingsForm activeCategory={activeCategory} />
+          </div>
+        </SessionProvider>
       </div>
     </div>
   );
