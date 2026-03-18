@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getItem, setItem, removeItem } from "@/lib/storage";
 import { nanoid } from "nanoid";
 
@@ -24,8 +24,17 @@ export type Draft = {
 
 const EMPTY_DRAFT: Draft = null;
 
+// 惰性初始化：从 localStorage 读取草稿
+function loadDraftFromStorage(): Draft {
+  if (typeof window === "undefined") return EMPTY_DRAFT;
+  return getItem<Draft>(DRAFT_KEY, EMPTY_DRAFT);
+}
+
 export function useDraft() {
-  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
+  // 使用惰性初始化读取 localStorage
+  const [draft, setDraft] = useState<Draft>(loadDraftFromStorage);
+  // 追踪是否是初始挂载，避免初始值触发保存
+  const isInitialMount = useRef(true);
 
   // 保存草稿到 localStorage
   const saveDraft = useCallback((draftToSave: Draft) => {
@@ -125,17 +134,12 @@ export function useDraft() {
     [saveDraft]
   );
 
-  // 组件挂载时从 localStorage 恢复草稿
+  // 草稿变化时保存到 localStorage（跳过初始挂载）
   useEffect(() => {
-    const savedDraft = getItem<Draft>(DRAFT_KEY, EMPTY_DRAFT);
-    if (savedDraft) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setDraft(savedDraft);
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
     }
-  }, []);
-
-  // 草稿变化时保存到 localStorage
-  useEffect(() => {
     if (draft) {
       setItem(DRAFT_KEY, draft);
     }
