@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback, memo } from "react";
-import { MessageSquare, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageItem } from "./MessageItem";
 import { MarkdownRenderer } from "./MarkdownRenderer";
@@ -23,26 +23,23 @@ function StreamingCursor() {
   );
 }
 
-// 欢迎占位组件
-function WelcomePlaceholder() {
+// 消息列表骨架屏
+function MessageListSkeleton() {
   return (
-    <div className="flex items-center justify-center h-full text-zinc-500">
-      <div className="text-center">
-        <MessageSquare className="h-16 w-16 mx-auto mb-4 opacity-50" />
-        <h2 className="text-xl font-medium mb-2 text-zinc-400">开始新对话</h2>
-        <p className="text-zinc-500 text-sm">
-          在下方输入您的问题，开始与 AI 对话
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// 加载状态组件
-function LoadingIndicator() {
-  return (
-    <div className="flex items-center justify-center h-full">
-      <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+    <div className="flex-1 p-4 space-y-4 overflow-hidden">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div
+          key={i}
+          className={`flex ${i % 2 === 0 ? "justify-start" : "justify-end"}`}
+        >
+          <div
+            className={`h-16 rounded-2xl animate-pulse ${
+              i % 2 === 0 ? "bg-zinc-800 w-[60%]" : "bg-blue-900/30 w-[40%]"
+            }`}
+            style={{ animationDelay: `${i * 150}ms` }}
+          />
+        </div>
+      ))}
     </div>
   );
 }
@@ -96,22 +93,14 @@ function MessageListInner({
     }
   }, [messages, streamContent, isStreaming, scrollToBottom]);
 
-  // 显示加载状态
+  // 显示加载骨架屏
   if (loading) {
-    return (
-      <div className="flex-1 overflow-hidden">
-        <LoadingIndicator />
-      </div>
-    );
+    return <MessageListSkeleton />;
   }
 
-  // 消息为空时显示欢迎占位
+  // 消息为空时返回 null（由父组件处理空状态）
   if (messages.length === 0 && !isStreaming) {
-    return (
-      <div className="flex-1 overflow-hidden">
-        <WelcomePlaceholder />
-      </div>
-    );
+    return null;
   }
 
   return (
