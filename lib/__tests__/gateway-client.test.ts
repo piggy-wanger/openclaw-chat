@@ -4,11 +4,16 @@ import type { GatewayHello, RpcResponse, EventMessage } from "../gateway-types";
 
 // Mock WebSocket
 class MockWebSocket {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
+
   static instances: MockWebSocket[] = [];
   static lastInstance: MockWebSocket | null = null;
 
   url: string;
-  readyState: number = WebSocket.CONNECTING;
+  readyState: number = MockWebSocket.CONNECTING;
   onopen: ((event: Event) => void) | null = null;
   onmessage: ((event: MessageEvent) => void) | null = null;
   onclose: ((event: CloseEvent) => void) | null = null;
@@ -25,7 +30,7 @@ class MockWebSocket {
 
   // Simulate server messages
   simulateOpen(): void {
-    this.readyState = WebSocket.OPEN;
+    this.readyState = MockWebSocket.OPEN;
     this.onopen?.(new Event("open"));
   }
 
@@ -34,7 +39,7 @@ class MockWebSocket {
   }
 
   simulateClose(code = 1000, reason = ""): void {
-    this.readyState = WebSocket.CLOSED;
+    this.readyState = MockWebSocket.CLOSED;
     this.onclose?.({ code, reason } as CloseEvent);
   }
 
@@ -43,13 +48,13 @@ class MockWebSocket {
   }
 }
 
-// Replace global WebSocket with mock
-vi.stubGlobal("WebSocket", MockWebSocket);
-
 describe("GatewayClient", () => {
   let client: GatewayClient;
 
   beforeEach(() => {
+    // Stub WebSocket globally
+    vi.stubGlobal("WebSocket", MockWebSocket);
+
     client = new GatewayClient();
     MockWebSocket.instances = [];
     MockWebSocket.lastInstance = null;
@@ -60,6 +65,9 @@ describe("GatewayClient", () => {
     client.disconnect();
     vi.useRealTimers();
     vi.clearAllMocks();
+
+    // Unstub globals to restore original WebSocket
+    vi.unstubAllGlobals();
   });
 
   describe("connect/disconnect", () => {

@@ -7,6 +7,10 @@ export default defineConfig({
     setupFiles: ["./lib/test/setup.ts"],
     include: ["**/__tests__/**/*.test.{ts,tsx}"],
     globals: true,
+    coverage: {
+      provider: "v8",
+      reporter: ["text"],
+    },
   },
   resolve: {
     alias: {
