@@ -43,9 +43,6 @@ export function GatewayProvider({ children }: { children: ReactNode }) {
   const [hello, setHello] = useState<GatewayHello | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // 用 ref 跟踪上一次的配置，避免不必要的重连
-  const prevConfigRef = useRef<{ url: string; token: string } | null>(null);
-
   // 连接到 Gateway
   const connect = useCallback(async (urlOverride?: string, tokenOverride?: string) => {
     // 使用传入的参数或 settings 中的值
@@ -76,6 +73,7 @@ export function GatewayProvider({ children }: { children: ReactNode }) {
         err instanceof Error ? err.message : "Failed to connect to Gateway";
       setError(message);
       setStatus("error");
+      throw err;
     }
   }, [settings.gatewayUrl, settings.gatewayToken]);
 
@@ -127,30 +125,7 @@ export function GatewayProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // 当 settings 变化时自动连接/重连
-  useEffect(() => {
-    const currentConfig = {
-      url: settings.gatewayUrl,
-      token: settings.gatewayToken,
-    };
-
-    // 检查配置是否变化
-    const configChanged =
-      prevConfigRef.current?.url !== currentConfig.url ||
-      prevConfigRef.current?.token !== currentConfig.token;
-
-    // 更新 ref
-    prevConfigRef.current = currentConfig;
-
-    // 如果有 URL，且（配置变化或未连接），尝试连接
-    if (settings.gatewayUrl && (configChanged || status === "disconnected")) {
-      // 使用 setTimeout 避免在 effect 中同步调用 setState
-      const timeoutId = setTimeout(() => {
-        connect();
-      }, 0);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [settings.gatewayUrl, settings.gatewayToken, status, connect]);
+  // 不自动连接，用户需手动点击"测试连接"
 
   // 组件卸载时断开连接
   useEffect(() => {

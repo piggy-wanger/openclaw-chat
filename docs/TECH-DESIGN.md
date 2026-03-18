@@ -4,34 +4,35 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      Next.js Application                     │
+│                  Next.js Static Build                        │
 ├─────────────────────────────────────────────────────────────┤
 │  Pages/App Router    │  Components    │  Hooks/Utils        │
-│  - / (chat)          │  - ChatUI      │  - useChat          │
-│  - /settings         │  - Sidebar     │  - useSession       │
-│  - /sessions/[id]    │  - MessageList │  - useSettings      │
-│                      │  - InputArea   │                     │
+│  - / (chat)          │  - ChatUI      │  - useGateway       │
+│  - /settings         │  - Sidebar     │  - useChat          │
+│                      │  - MessageList │  - useSession       │
+│                      │  - InputArea   │  - useSettings      │
 ├─────────────────────────────────────────────────────────────┤
-│  State Management (Zustand/React Context)                   │
-│  - Session state                                             │
-│  - Message cache                                             │
-│  - UI state                                                  │
+│  WebSocket Client Layer                                       │
+│  - lib/gateway-client.ts (WebSocket RPC)                     │
+│  - chat.send / chat.history / chat.abort                     │
+│  - sessions.list / sessions.patch / sessions.reset           │
 ├─────────────────────────────────────────────────────────────┤
-│  Data Layer                                                  │
-│  - Drizzle ORM                                               │
-│  - SQLite Database                                           │
-│  - API Routes                                                │
+│  Local Storage                                                │
+│  - Settings (Gateway URL, Token, UI preferences)             │
+│  - Draft persistence                                          │
 ├─────────────────────────────────────────────────────────────┤
-│  External Services                                           │
-│  - OpenClaw Backend API                                      │
+│  ◄─────────── WebSocket ───────────►                        │
+│        OpenClaw Gateway (ws://127.0.0.1:18789)               │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+**核心设计：前端直连 Gateway WebSocket，无需后端代理。**
 
 ## Technology Stack
 
 ### Frontend Framework
 
-- **Next.js 16** - React framework with App Router
+- **Next.js 16** - React framework with App Router (static export)
 - **React 19** - UI library
 - **TypeScript** - Type safety
 
@@ -41,75 +42,73 @@
 - **shadcn/ui** - Component library
 - **Lucide React** - Icons
 
-### Data Layer
+### Communication
 
-- **Drizzle ORM** - Type-safe ORM
-- **better-sqlite3** - SQLite driver
-- **SQLite** - Database
+- **WebSocket** - 直连 OpenClaw Gateway
+- **Protocol v3** - Gateway RPC 协议
+
+### Data Storage
+
+- **Gateway** - Session 和 Message 的权威数据源
+- **localStorage** - 本地设置、草稿、UI 偏好
 
 ### State Management
 
-- React Context for simple state
-- Custom hooks for business logic
+- React Context + custom hooks
 - localStorage for draft persistence
 
-## Database Schema
+## OpenClaw Gateway WebSocket API
 
-### Sessions Table
+### 连接
 
-```sql
-CREATE TABLE sessions (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  type TEXT NOT NULL DEFAULT 'direct',  -- 'direct' | 'group'
-  model TEXT NOT NULL DEFAULT 'claude-sonnet-4-6',
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
+```typescript
+// WebSocket 握手参数
+{
+  url: "ws://127.0.0.1:18789",
+  params: {
+    auth: {
+      token: "gateway-token"  // onboarding 时生成
+    }
+  },
+  clientName: "openclaw-chat",
+  clientVersion: "0.1.0",
+  platform: "browser",
+  caps: ["TOOL_EVENTS"],
+  minProtocol: 3,
+  maxProtocol: 3
+}
 ```
 
-### Messages Table
+### RPC 方法（请求/响应）
 
-```sql
-CREATE TABLE messages (
-  id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-  role TEXT NOT NULL,  -- 'user' | 'assistant' | 'system'
-  content TEXT NOT NULL,
-  created_at INTEGER NOT NULL
-);
-```
+| 方法 | 参数 | 返回 | 用途 |
+|------|------|------|------|
+| `chat.send` | `{ sessionKey, message, thinking?, deliver?, timeoutMs?, idempotencyKey }` | `{ runId, status: "started" }` | 发送消息（非阻塞） |
+| `chat.abort` | `{ sessionKey, runId }` | - | 中止当前回复 |
+| `chat.history` | `{ sessionKey, limit }` | 消息历史数组 | 加载会话历史 |
+| `sessions.list` | `{ limit?, activeMinutes?, agentId? }` | 会话列表 | 列出所有会话 |
+| `sessions.patch` | `opts` | - | 更新会话（重命名等） |
+| `sessions.reset` | `{ key, reason? }` | - | 重置/清空会话 |
 
-### Settings Table
+### 事件流（服务端推送）
 
-```sql
-CREATE TABLE settings (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-```
+| 事件 | payload | 说明 |
+|------|---------|------|
+| `chat` | `{ sessionKey, runId, state, message?, errorMessage? }` | state: `delta`（流式文本）/ `final`（完成）/ `aborted` / `error` |
+| `agent` | `{ runId, stream, data }` | stream: `tool`（phase: start/update/result）/ `lifecycle`（phase: start/end/error） |
 
-## API Design
+### chat 事件 state 详解
 
-### Internal API Routes
+- **`delta`**: 流式文本片段，`message` 包含当前增量文本
+- **`final`**: 回复完成，`message` 包含完整回复对象
+- **`aborted`**: 用户中止
+- **`error`**: 出错，`errorMessage` 包含错误信息
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/sessions` | GET | List all sessions |
-| `/api/sessions` | POST | Create new session |
-| `/api/sessions/[id]` | GET | Get session with messages |
-| `/api/sessions/[id]` | PATCH | Update session |
-| `/api/sessions/[id]` | DELETE | Delete session |
-| `/api/chat` | POST | Send message (streaming) |
-| `/api/settings` | GET | Get all settings |
-| `/api/settings` | PUT | Update settings |
+### agent 事件 tool 详解
 
-### OpenClaw Backend Integration
-
-- Streaming responses via Server-Sent Events or chunked responses
-- Tool-call data formatting and display
-- Error handling and retry logic
+- **`phase: "start"`**: 工具调用开始，`data.args` 包含参数
+- **`phase: "update"`**: 工具执行中，`data.partialResult` 包含部分结果
+- **`phase: "result"`**: 工具执行完成，`data.result` 包含最终结果
 
 ## Component Structure
 
@@ -119,26 +118,18 @@ src/
 │   ├── layout.tsx
 │   ├── page.tsx
 │   ├── globals.css
-│   ├── sessions/
-│   │   └── [id]/
-│   │       └── page.tsx
-│   ├── settings/
-│   │   └── page.tsx
-│   └── api/
-│       ├── sessions/
-│       │   └── route.ts
-│       ├── chat/
-│       │   └── route.ts
-│       └── settings/
-│           └── route.ts
+│   └── settings/
+│       └── page.tsx
 ├── components/
 │   ├── ui/              # shadcn/ui components
 │   ├── chat/
-│   │   ├── ChatContainer.tsx
+│   │   ├── ChatHeader.tsx
 │   │   ├── MessageList.tsx
 │   │   ├── MessageItem.tsx
+│   │   ├── MarkdownRenderer.tsx
+│   │   ├── InputArea.tsx
 │   │   ├── ToolCallCard.tsx
-│   │   └── InputArea.tsx
+│   │   └── ToolCallList.tsx
 │   ├── sidebar/
 │   │   ├── Sidebar.tsx
 │   │   ├── SessionList.tsx
@@ -146,68 +137,97 @@ src/
 │   └── settings/
 │       └── SettingsForm.tsx
 ├── hooks/
-│   ├── useChat.ts
-│   ├── useSession.ts
-│   └── useSettings.ts
+│   ├── useGateway.ts      # WebSocket 连接管理
+│   ├── useChat.ts         # 聊天消息 + 流式响应
+│   ├── useSession.ts      # 会话列表管理
+│   ├── useSettings.ts     # 设置读写
+│   └── useDraft.ts        # 草稿持久化
 ├── lib/
 │   ├── utils.ts
-│   ├── api.ts
-│   └── storage.ts
-└── db/
+│   ├── gateway-client.ts  # WebSocket RPC 客户端
+│   ├── gateway-types.ts   # RPC 方法 + 事件类型定义
+│   └── storage.ts         # localStorage 封装
+└── db/                    # 保留，后续可做离线缓存
     ├── index.ts
     └── schema.ts
 ```
 
 ## Key Implementation Details
 
+### Gateway Client (lib/gateway-client.ts)
+
+```typescript
+class GatewayClient {
+  // 连接管理
+  connect(url: string, token: string): void
+  disconnect(): void
+  reconnect(): void
+
+  // RPC 方法
+  chatSend(opts: ChatSendOpts): Promise<{ runId: string }>
+  chatAbort(opts: ChatAbortOpts): Promise<void>
+  chatHistory(opts: ChatHistoryOpts): Promise<ChatHistoryResponse>
+  sessionsList(opts?: SessionsListOpts): Promise<Session[]>
+  sessionsPatch(opts: SessionsPatchOpts): Promise<void>
+  sessionsReset(key: string): Promise<void>
+
+  // 事件订阅
+  onChat(handler: (event: ChatEvent) => void): () => void
+  onAgent(handler: (event: AgentEvent) => void): () => void
+  onDisconnect(handler: () => void): () => void
+}
+```
+
+### 消息流
+
+1. 用户发送消息 → `chat.send({ sessionKey, message })`
+2. Gateway 立即返回 `{ runId, status: "started" }`
+3. AI 回复通过 `chat` 事件流式推送（`delta` → `final`）
+4. 工具调用通过 `agent` 事件推送（`tool` stream）
+5. 用户可随时调用 `chat.abort({ sessionKey, runId })` 中止
+
+### Session Key 格式
+
+- 主会话: `agent:<agentId>:main`
+- 直聊: `agent:<agentId>:direct:<peerId>`
+- 群聊: `agent:<agentId>:<channel>:group:<id>`
+
+### Settings 存储
+
+- Gateway URL + Token: localStorage（前端直连需要）
+- UI 偏好（主题等）: localStorage
+- Gateway 本身不存储 openclaw-chat 的 UI 设置
+
 ### Draft Session Flow
 
-1. User creates new session -> stored in localStorage as draft
-2. User types message -> persists to localStorage
-3. User sends message -> API call to OpenClaw
-4. On success -> migrate draft to database session
-5. Clear localStorage draft
-
-### Settings Backup
-
-Before any settings write:
-1. Read current settings
-2. Write to backup file (`.settings-backup.json`)
-3. Proceed with settings update
-4. On failure, restore from backup
-
-### Streaming Tool Calls
-
-Tool-call cards render progressively as:
-1. Tool name appears immediately
-2. Arguments stream in real-time
-3. Result appears when complete
-4. Visual state transitions (pending → running → complete)
+1. 用户创建新会话 → localStorage 存草稿
+2. 用户输入消息 → localStorage 实时保存
+3. 用户发送消息 → `chat.send()` → Gateway 创建/使用会话
+4. 草稿清除，session 切换到 Gateway 管理的会话
 
 ## Deployment
 
 ### Build
 
 ```bash
-npm run build
+npm run build  # 静态导出
 ```
 
-### Production Start
+### 部署方式
 
-```bash
-npm run start
-```
+1. **静态托管**: build 产物可放任意静态服务器/CDN
+2. **Gateway 托管**: 将 build 产物配置为 Gateway 的静态文件服务
+3. **独立服务**: `npm run start` 跑 Next.js 服务
 
 ### Environment Variables
 
 ```
-OPENCLAW_API_URL=your_backend_url
-OPENCLAW_API_KEY=your_api_key
+NEXT_PUBLIC_GATEWAY_URL=ws://127.0.0.1:18789  # 默认 Gateway 地址（可在 Settings 中修改）
 ```
 
 ## Security Considerations
 
-- API keys stored server-side only
-- Input sanitization for user messages
-- SQL injection prevention via Drizzle ORM
-- XSS prevention via React's default escaping
+- Token 存储在 localStorage（自部署场景可接受）
+- XSS 防护: React 默认转义
+- 连接 Gateway 时自动处理 pairing（本地连接自动批准）
+- 不暴露服务端 API Key（直连模式无需后端存储 Key）

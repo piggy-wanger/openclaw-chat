@@ -2,27 +2,34 @@
 
 ## Overview
 
-OpenClaw Chat is a modern chat frontend application designed to connect with OpenClaw backend services. It provides a clean, intuitive interface for AI-powered conversations with support for both direct chats and group chats.
+OpenClaw Chat is a modern chat frontend that connects directly to OpenClaw Gateway via WebSocket. It provides a clean, intuitive interface for AI-powered conversations with streaming responses, tool-call visualization, and Markdown rendering.
+
+## Architecture
+
+- **Frontend**: Next.js static build, runs in the browser
+- **Communication**: WebSocket 直连 OpenClaw Gateway (Protocol v3)
+- **Data Source**: Gateway 管理所有 Session 和 Message
+- **Local Storage**: Settings、drafts、UI preferences
 
 ## Target Users
 
-- Users of OpenClaw backend services who need a web-based chat interface
-- Teams collaborating through AI-assisted group conversations
-- Individuals managing multiple AI chat sessions
+- Users of OpenClaw who want a modern web-based chat UI
+- Users managing multiple AI chat sessions via Gateway
 
 ## Core Features
 
 ### 1. Session Management
 
 - **Session Types**
-  - Direct chats (1:1 conversations with AI)
-  - Group chats (multi-participant conversations, grouped under unified "群聊" section)
+  - 主会话（Gateway main session）
+  - Direct chats
+  - Group chats
 
 - **Session Operations**
-  - Create new sessions
-  - Rename sessions
-  - Delete sessions
-  - Archive sessions (future consideration)
+  - 从 Gateway 加载会话列表（`sessions.list`）
+  - 新建会话（首条消息自动创建）
+  - 重命名会话（`sessions.patch`）
+  - 删除/重置会话（`sessions.reset`）
 
 - **Draft Sessions**
   - New sessions start as drafts
@@ -33,13 +40,14 @@ OpenClaw Chat is a modern chat frontend application designed to connect with Ope
 
 - **Message Types**
   - User messages
-  - Assistant responses (with streaming support)
+  - Assistant responses（流式 streaming）
   - System messages
+  - Tool call cards（实时可视化）
 
 - **Message Features**
-  - Streaming tool-call card visualization
-  - Code block syntax highlighting
-  - Markdown rendering
+  - Streaming tool-call card visualization（start → update → result）
+  - Code block syntax highlighting + copy button
+  - Markdown rendering（GFM tables, links etc）
   - Message timestamps
 
 ### 3. Model Selection
@@ -50,12 +58,9 @@ OpenClaw Chat is a modern chat frontend application designed to connect with Ope
 
 ### 4. Settings Management
 
-- Application-level settings
-- Backup created before each settings write
-- Settings include:
-  - Default model preference
-  - UI preferences
-  - API configuration
+- Gateway 连接配置（URL + Token）
+- 连接测试
+- UI preferences（localStorage）
 
 ## Non-Functional Requirements
 
@@ -73,9 +78,9 @@ OpenClaw Chat is a modern chat frontend application designed to connect with Ope
 
 ### Deployment
 
-- Ordinary Node.js service deployment
-- No Docker requirement
-- SQLite for data persistence
+- 静态构建（`npm run build`），可托管在任何静态服务器
+- 或通过 Gateway 提供静态文件服务
+- 无需 Node.js 运行时（纯静态）
 
 ## Out of Scope (Phase 1)
 

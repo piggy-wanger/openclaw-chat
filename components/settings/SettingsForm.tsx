@@ -143,6 +143,7 @@ function SettingsFormInner({
   const [messageFontSize, setMessageFontSize] = useState<FontSize>(() => initialMessageFontSize);
   const [codeFontSize, setCodeFontSize] = useState<FontSize>(() => initialCodeFontSize);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const { status, connect } = useGateway();
@@ -178,12 +179,15 @@ function SettingsFormInner({
     });
 
     // 直接传入参数连接，避免 React state 异步更新问题
+    setTesting(true);
     try {
       await connect(gatewayUrl, gatewayToken);
       toast.success("连接成功");
     } catch (err) {
       const message = err instanceof Error ? err.message : "连接失败";
       toast.error(`连接失败: ${message}`);
+    } finally {
+      setTesting(false);
     }
   }, [gatewayUrl, gatewayToken, setSettings, connect]);
 
@@ -312,11 +316,11 @@ function SettingsFormInner({
         <div className="flex gap-3">
           <Button
             onClick={handleTestConnection}
-            disabled={status === "connecting"}
+            disabled={testing}
             variant="outline"
             className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
           >
-            {status === "connecting" ? (
+            {testing ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 连接中...

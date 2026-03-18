@@ -17,7 +17,10 @@ import type {
   SessionsListOpts,
   SessionsPatchOpts,
   EventMessage,
+  ChallengeEvent,
 } from "./gateway-types";
+import { GatewayRequestError } from "./gateway-types";
+import { getOrCreateIdentity, signChallenge, buildAuthString } from "./device-identity";
 
 type PendingRequest = {
   resolve: (value: unknown) => void;
@@ -25,21 +28,18 @@ type PendingRequest = {
 };
 
 const DEFAULT_URL = "ws://127.0.0.1:18789";
-const CLIENT_NAME = "openclaw-chat";
+const CLIENT_ID = "openclaw-control-ui";
 const CLIENT_VERSION = "0.1.0";
-const MAX_RECONNECT_ATTEMPTS = 10;
-const MAX_RECONNECT_DELAY = 30000;
-const BASE_RECONNECT_DELAY = 1000;
+const BASE_RECONNECT_DELAY = 800;
+const MAX_RECONNECT_DELAY = 15000;
 const CONNECT_TIMEOUT = 10000;
 
 export class GatewayClient {
   private ws: WebSocket | null = null;
   private config: GatewayConnectionConfig | null = null;
-  private requestId = 0;
-  private pendingRequests: Map<number, PendingRequest> = new Map();
+  private pendingRequests: Map<string, PendingRequest> = new Map();
   private listeners: Partial<GatewayEventMap> = {};
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = MAX_RECONNECT_ATTEMPTS;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connectionState: ConnectionState = "disconnected";
   private readyResolve: (() => void) | null = null;
@@ -47,6 +47,7 @@ export class GatewayClient {
   private readyPromise: Promise<void> = Promise.resolve();
   private intentionalDisconnect = false;
   private connectTimer: ReturnType<typeof setTimeout> | null = null;
+  private challengeResolve: ((nonce: string) => void) | null = null;
 
   // ==================== 连接管理 ====================
 
@@ -111,9 +112,16 @@ export class GatewayClient {
     }
 
     // 拒绝所有待处理的请求
-    for (const [seq, { reject }] of this.pendingRequests) {
-      reject(new Error("Connection closed"));
-      this.pendingRequests.delete(seq);
+    this.flushPendingRequests("Connection closed");
+  }
+
+  /**
+   * 清空所有 pending requests
+   */
+  private flushPendingRequests(reason: string): void {
+    for (const [id, { reject }] of this.pendingRequests) {
+      reject(new Error(reason));
+      this.pendingRequests.delete(id);
     }
   }
 
@@ -123,7 +131,8 @@ export class GatewayClient {
   private createWebSocket(): void {
     if (!this.config) return;
 
-    const url = this.buildWebSocketUrl(this.config);
+    // URL 不带任何 query params
+    const url = this.config.url || DEFAULT_URL;
 
     try {
       this.ws = new WebSocket(url);
@@ -138,35 +147,13 @@ export class GatewayClient {
   }
 
   /**
-   * 构建 WebSocket URL
-   */
-  private buildWebSocketUrl(config: GatewayConnectionConfig): string {
-    const url = new URL(config.url || DEFAULT_URL);
-
-    // 添加查询参数
-    url.searchParams.set("clientName", CLIENT_NAME);
-    url.searchParams.set("clientVersion", CLIENT_VERSION);
-    url.searchParams.set("platform", "browser");
-    url.searchParams.set("caps", "TOOL_EVENTS");
-    url.searchParams.set("minProtocol", "3");
-    url.searchParams.set("maxProtocol", "3");
-
-    if (config.token) {
-      url.searchParams.set("token", config.token);
-    }
-
-    return url.toString();
-  }
-
-  /**
    * 安排重连
    */
   private scheduleReconnect(): void {
     if (this.intentionalDisconnect) return;
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      this.emit("error", new Error("Max reconnect attempts reached"));
-      return;
-    }
+
+    // 清空 pending requests
+    this.flushPendingRequests("Connection lost, reconnecting");
 
     const delay = this.getReconnectDelay();
     this.reconnectAttempts++;
@@ -197,27 +184,27 @@ export class GatewayClient {
   // ==================== WebSocket 生命周期 ====================
 
   private onOpen(): void {
-    // WebSocket 已打开，等待 hello 消息
+    // WebSocket 已打开，等待 connect.challenge 事件
   }
 
   private onMessage(event: MessageEvent): void {
     try {
       const data = JSON.parse(event.data);
 
-      // 处理 hello 消息
-      if (data.serverVersion !== undefined) {
-        this.handleHello(data as GatewayHello);
+      // 处理 connect.challenge 事件
+      if (data.type === "event" && data.event === "connect.challenge") {
+        this.handleChallenge(data.payload as ChallengeEvent);
         return;
       }
 
       // 处理 RPC 响应
-      if (data.seq !== undefined) {
+      if (data.type === "res") {
         this.handleRpcResponse(data as RpcResponse);
         return;
       }
 
       // 处理事件
-      if (data.event !== undefined) {
+      if (data.type === "event") {
         this.handleEvent(data as EventMessage);
         return;
       }
@@ -228,27 +215,157 @@ export class GatewayClient {
 
   private onClose(event: CloseEvent): void {
     const wasConnected = this.connectionState === "connected";
+    const wasConnecting = this.connectionState === "connecting";
     this.connectionState = "disconnected";
     this.ws = null;
 
     // 清理所有待处理的请求，避免内存泄漏
     this.cleanup();
 
+    // 如果是连接过程中被关闭，reject readyPromise 避免永久挂起
+    if (wasConnecting && this.readyReject) {
+      this.readyReject(new Error(`Connection closed: ${event.reason || `Code: ${event.code}`}`));
+      this.readyReject = null;
+      this.readyResolve = null;
+    }
+
     if (wasConnected) {
       this.emit("disconnect", event.reason || `Code: ${event.code}`);
     }
 
-    if (!this.intentionalDisconnect) {
+    // 认证失败（1008）或配置错误不自动重连
+    if (!this.intentionalDisconnect && event.code !== 1008) {
       this.scheduleReconnect();
     }
   }
 
   private onError(_event: Event): void {
-    void _event; // Explicitly ignore unused parameter
+    void _event;
     this.emit("error", new Error("WebSocket error"));
   }
 
-  // ==================== 消息处理 ====================
+  // ==================== 握手协议 ====================
+
+  private handleChallenge(challenge: ChallengeEvent): void {
+    // 如果 challengeResolve 存在，说明已经在等待 challenge
+    if (this.challengeResolve) {
+      this.challengeResolve(challenge.nonce);
+      this.challengeResolve = null;
+      return;
+    }
+
+    // 否则发起 connect RPC 请求
+    this.sendConnectRequest(challenge.nonce);
+  }
+
+  private async sendConnectRequest(nonce: string): Promise<void> {
+    if (!this.config) return;
+
+    // 构建 auth 对象（只在 token 或 password 有值时才包含）
+    const auth: { token?: string; password?: string } = {};
+    if (this.config.token) {
+      auth.token = this.config.token;
+    }
+    if (this.config.password) {
+      auth.password = this.config.password;
+    }
+
+    const clientMode = "webchat";
+    const role = "operator";
+    const scopes = ["operator.admin", "operator.read"];
+
+    const connectParams: Record<string, unknown> = {
+      minProtocol: 3,
+      maxProtocol: 3,
+      client: {
+        id: CLIENT_ID,
+        version: CLIENT_VERSION,
+        platform: "web",
+        mode: clientMode,
+      },
+      role,
+      scopes,
+      caps: ["tool-events"],
+      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "unknown",
+      locale: typeof navigator !== "undefined" ? navigator.language : "en",
+    };
+
+    // 只在 auth 有内容时才添加
+    if (Object.keys(auth).length > 0) {
+      connectParams.auth = auth;
+    }
+
+    // 添加设备身份（ed25519 签名）
+    try {
+      const identity = await getOrCreateIdentity();
+      if (identity) {
+        const signedAt = Date.now();
+        const authString = buildAuthString({
+          deviceId: identity.deviceId,
+          clientId: CLIENT_ID,
+          clientMode,
+          role,
+          scopes,
+          signedAtMs: signedAt,
+          token: this.config.token ?? null,
+          nonce,
+        });
+
+        const signature = await signChallenge(identity.privateKey, identity.publicKey, authString);
+
+        connectParams.device = {
+          id: identity.deviceId,
+          publicKey: identity.publicKey,
+          signature,
+          signedAt,
+          nonce,
+        };
+      } else {
+        console.warn("Device identity not available (ed25519 not supported)");
+      }
+    } catch (error) {
+      console.error("Failed to create device identity:", error);
+    }
+
+    try {
+      // 使用内部方法发送 connect 请求，不检查连接状态
+      const hello = await this.sendConnectRpc(connectParams);
+      this.handleHello(hello as GatewayHello);
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.readyReject?.(err);
+      this.readyReject = null;
+      this.readyResolve = null;
+      this.ws?.close();
+    }
+  }
+
+  /**
+   * 发送 connect RPC 请求（内部方法，不检查连接状态）
+   */
+  private sendConnectRpc(params: Record<string, unknown>): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      if (!this.ws) {
+        reject(new Error("WebSocket not connected"));
+        return;
+      }
+
+      const id = crypto.randomUUID();
+      const rpcRequest: RpcRequest = { type: "req", id, method: "connect", params };
+
+      this.pendingRequests.set(id, {
+        resolve,
+        reject,
+      });
+
+      try {
+        this.ws.send(JSON.stringify(rpcRequest));
+      } catch (error) {
+        this.pendingRequests.delete(id);
+        reject(error);
+      }
+    });
+  }
 
   private handleHello(hello: GatewayHello): void {
     const wasReconnecting = this.reconnectAttempts > 0;
@@ -273,16 +390,24 @@ export class GatewayClient {
     }
   }
 
+  // ==================== 消息处理 ====================
+
   private handleRpcResponse(response: RpcResponse): void {
-    const pending = this.pendingRequests.get(response.seq);
+    const pending = this.pendingRequests.get(response.id);
     if (!pending) return;
 
-    this.pendingRequests.delete(response.seq);
+    this.pendingRequests.delete(response.id);
 
-    if (response.error) {
-      pending.reject(new Error(response.error.message));
+    if (!response.ok && response.error) {
+      pending.reject(
+        new GatewayRequestError(
+          response.error.code,
+          response.error.message,
+          response.error.details
+        )
+      );
     } else {
-      pending.resolve(response.result);
+      pending.resolve(response.payload);
     }
   }
 
@@ -292,24 +417,25 @@ export class GatewayClient {
     } else if (message.event === "agent") {
       this.emit("agent", message.payload as AgentEvent);
     }
+    // connect.challenge 已在 onMessage 中单独处理
   }
 
   // ==================== RPC 方法 ====================
 
   /**
-   * 发送 RPC 请求
+   * 发送 RPC 请求（公开方法）
    */
-  private request<T = unknown>(method: string, params: Record<string, unknown>): Promise<T> {
+  request<T = unknown>(method: string, params: Record<string, unknown>): Promise<T> {
     return new Promise((resolve, reject) => {
       if (!this.ws || this.connectionState !== "connected") {
         reject(new Error("Not connected"));
         return;
       }
 
-      const seq = ++this.requestId;
-      const rpcRequest: RpcRequest = { seq, method, params };
+      const id = crypto.randomUUID();
+      const rpcRequest: RpcRequest = { type: "req", id, method, params };
 
-      this.pendingRequests.set(seq, {
+      this.pendingRequests.set(id, {
         resolve: resolve as (value: unknown) => void,
         reject,
       });
@@ -317,7 +443,7 @@ export class GatewayClient {
       try {
         this.ws.send(JSON.stringify(rpcRequest));
       } catch (error) {
-        this.pendingRequests.delete(seq);
+        this.pendingRequests.delete(id);
         reject(error);
       }
     });
@@ -347,8 +473,9 @@ export class GatewayClient {
   /**
    * 获取会话列表
    */
-  sessionsList(opts?: SessionsListOpts): Promise<SessionEntry[]> {
-    return this.request<SessionEntry[]>("sessions.list", opts || {});
+  async sessionsList(opts?: SessionsListOpts): Promise<SessionEntry[]> {
+    const result = await this.request<{ sessions?: SessionEntry[] }>("sessions.list", opts || {});
+    return Array.isArray(result?.sessions) ? result.sessions : [];
   }
 
   /**

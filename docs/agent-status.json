@@ -1,0 +1,18 @@
+{
+  "agents": [
+    {
+      "id": "phase1-bootstrap",
+      "type": "executor",
+      "tool": "claude-code",
+      "tmuxSession": null,
+      "worktree": "/home/bowie/projects/openclaw-chat-phase1",
+      "branch": "feat/phase1-bootstrap",
+      "status": "merged",
+      "prNumber": 1,
+      "startedAt": "2026-03-18T14:12:00+08:00",
+      "retries": 0,
+      "reviewResult": "1 critical + 4 major + 1 minor，均在后续 Phase 实现范围"
+    }
+  ],
+  "lastChecked": "2026-03-19T00:42:00+08:00"
+}

@@ -69,8 +69,9 @@ export function SessionItem({
 
   return (
     <>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         className={cn(
           "group flex items-center gap-2 rounded-lg px-3 py-2 cursor-pointer transition-colors w-full text-left",
           isActive
@@ -78,6 +79,12 @@ export function SessionItem({
             : "hover:bg-zinc-800/50 text-zinc-300"
         )}
         onClick={onSelect}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect();
+          }
+        }}
       >
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium truncate">{session.title}</div>
@@ -109,7 +116,7 @@ export function SessionItem({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </button>
+      </div>
 
       {/* Rename Dialog */}
       <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>

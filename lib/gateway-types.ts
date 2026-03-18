@@ -88,35 +88,67 @@ export type GatewayConnectionConfig = {
   password?: string;
 };
 
-// Gateway Hello 消息
+// Challenge 事件
+export type ChallengeEvent = {
+  nonce: string;
+};
+
+// Gateway Hello 消息（connect 响应的 payload）
 export type GatewayHello = {
   serverVersion: string;
   protocolVersion: number;
   capabilities?: string[];
+  auth?: {
+    method: string;
+    user?: {
+      id: string;
+      name?: string;
+    };
+  };
+  snapshot?: unknown;
 };
 
 // RPC 请求格式
 export type RpcRequest = {
-  seq: number;
+  type: "req";
+  id: string; // UUID
   method: string;
   params: Record<string, unknown>;
 };
 
 // RPC 响应格式
 export type RpcResponse = {
-  seq: number;
-  result?: unknown;
+  type: "res";
+  id: string; // UUID
+  ok: boolean;
+  payload?: unknown;
   error?: {
-    code: number;
+    code: string;
     message: string;
+    details?: object;
   };
 };
 
 // 事件消息格式
 export type EventMessage = {
-  event: "chat" | "agent";
-  payload: ChatEvent | AgentEvent;
+  type: "event";
+  event: "chat" | "agent" | "connect.challenge";
+  payload: ChatEvent | AgentEvent | ChallengeEvent;
+  seq?: number;
 };
+
+// GatewayRequestError 类
+export class GatewayRequestError extends Error {
+  code: string;
+  details?: object;
+
+  constructor(code: string, message: string, details?: object) {
+    super(message);
+    this.name = "GatewayRequestError";
+    this.code = code;
+    this.details = details;
+  }
+}
 
 // GatewayClient 事件回调
 export type GatewayEventMap = {
