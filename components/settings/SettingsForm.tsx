@@ -34,9 +34,9 @@ function SettingsFormInner({
   initialApiKey,
   onUpdateSettings,
 }: SettingsFormInnerProps) {
-  const [defaultModel, setDefaultModel] = useState<string | null>(initialDefaultModel);
-  const [apiUrl, setApiUrl] = useState(initialApiUrl);
-  const [apiKey, setApiKey] = useState(initialApiKey);
+  const [defaultModel, setDefaultModel] = useState<string | null>(() => initialDefaultModel);
+  const [apiUrl, setApiUrl] = useState(() => initialApiUrl);
+  const [apiKey, setApiKey] = useState(() => initialApiKey);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
