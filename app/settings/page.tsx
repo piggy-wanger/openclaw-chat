@@ -63,7 +63,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Main Card */}
-          <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden flex">
+          <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden flex" style={{ height: "calc(100vh - 12rem)" }}>
             {/* Sidebar Navigation (desktop) */}
             <nav className="hidden md:flex flex-col w-[180px] min-w-[180px] border-r border-zinc-800 py-2">
               {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
@@ -84,7 +84,7 @@ export default function SettingsPage() {
             </nav>
 
             {/* Content Area */}
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 overflow-y-auto">
               <SettingsForm activeCategory={activeCategory} />
             </div>
           </div>
