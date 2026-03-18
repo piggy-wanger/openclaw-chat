@@ -1,62 +1,60 @@
 # OpenClaw Chat - Tasks Breakdown
 
-## Phase 1: Bootstrap
+## Phase 1: Bootstrap ✅ (PR #1)
 
-- [ ] Initialize Next.js project
-- [ ] Configure TypeScript
-- [ ] Set up Tailwind CSS
-- [ ] Install shadcn/ui
-- [ ] Configure Drizzle ORM + SQLite
-- [ ] Create documentation (PRD, Tech Design, Tasks)
-- [ ] Verify build and lint
+- [x] Initialize Next.js project
+- [x] Configure TypeScript
+- [x] Set up Tailwind CSS
+- [x] Install shadcn/ui
+- [x] Configure Drizzle ORM + SQLite
+- [x] Create documentation (PRD, Tech Design, Tasks)
+- [x] Verify build and lint
 
-## Phase 2: Core Infrastructure
+## Phase 2: Core Infrastructure ✅ (PR #2, #3, #4)
 
-### Database Setup
-- [ ] Create database migrations
-- [ ] Implement database initialization (via db:push)
-- [ ] Add seed data for testing (optional)
+### Database Setup ✅ (PR #2)
+- [x] Create database migrations
+- [x] Implement database initialization (via db:push)
+- [x] Add seed data for testing (optional)
 
-### API Routes
-- [ ] Implement `/api/sessions` CRUD
-- [ ] Implement `/api/chat` endpoint
-- [ ] Implement `/api/chat/stream` streaming endpoint
-- [ ] Implement `/api/settings` endpoints
-- [ ] Add error handling (basic)
+### API Routes ✅ (PR #3)
+- [x] Implement `/api/sessions` CRUD
+- [x] Implement `/api/chat` endpoint
+- [x] Implement `/api/chat/stream` streaming endpoint
+- [x] Implement `/api/settings` endpoints
+- [x] Add error handling (basic)
 
-### State Management
-- [ ] Create session store (useSession hook)
-- [ ] Create message store (useChat hook)
-- [ ] Create settings store (useSettings hook)
-- [ ] Implement localStorage draft persistence
+### State Management ✅ (PR #4)
+- [x] Create session store (useSession hook)
+- [x] Create message store (useChat hook)
+- [x] Create settings store (useSettings hook)
+- [x] Implement localStorage draft persistence
 
-### UI Components (Single Chat MVP)
-- [ ] Create main layout with sidebar
-- [ ] Session list component
-- [ ] Session item with actions (rename, delete)
-- [ ] New session button
-- [ ] Message list component
-- [ ] Message item component
-- [ ] Input area with send button
-- [ ] Model selector (session-level)
-- [ ] Chat header with agent/session/model info
-- [ ] Settings page scaffold
+## Phase 3: UI Components ✅ (PR #5, #6, #7)
 
-## Phase 3: UI Components
+### Layout ✅ (PR #5)
+- [x] Create main layout with sidebar
+- [x] Session list component
+- [x] Session item with actions (rename, delete)
+- [x] New session button
+- [x] Chat header with agent/session/model info
+- [x] Settings page scaffold
+- [x] Implement responsive sidebar toggle
+- [x] Add loading states
 
-### Layout
-- [ ] Implement responsive sidebar toggle
-- [ ] Add loading states
-- [ ] Message list with virtualization
+### Chat Area ✅ (PR #6)
+- [x] Message list component (auto-scroll, user scroll detection)
+- [x] Message item component
+- [x] Input area with send button
+- [x] Markdown rendering
+- [x] Code block syntax highlighting + copy button
+- [x] Streaming cursor animation
 
-### Chat Area
-- [ ] Markdown rendering
-- [ ] Code block syntax highlighting
-
-### Tool Call Cards
-- [ ] Tool call card component
-- [ ] Streaming state visualization
-- [ ] Result display
+### Tool Call Cards ✅ (PR #7)
+- [x] Tool call card component (collapsible, status icons)
+- [x] Streaming state visualization (spinner, success/error)
+- [x] Result display (formatted params + markdown result)
+- [x] Collapsible accessibility (aria-controls, id)
 
 ## Phase 4: OpenClaw Integration
 
@@ -104,10 +102,10 @@
 
 ## Priority Order
 
-1. **Phase 1** - Bootstrap
-2. **Phase 2** - Core Infrastructure
-3. **Phase 3** - UI Components
-4. **Phase 4** - OpenClaw Integration (required for value)
+1. ~~**Phase 1** - Bootstrap~~ ✅
+2. ~~**Phase 2** - Core Infrastructure~~ ✅
+3. ~~**Phase 3** - UI Components~~ ✅
+4. **Phase 4** - OpenClaw Integration (required for value) ⬅️ NEXT
 5. **Phase 5** - Settings & Polish (enhances experience)
 6. **Phase 6** - Testing & Documentation (quality assurance)
 
