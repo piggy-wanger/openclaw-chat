@@ -13,9 +13,9 @@ type ModelSettingsProps = {
   gatewayStatus: GatewayStatus;
 };
 
-// 从模型 ID 提取 provider
-function getProvider(modelId: string): string {
-  const parts = modelId.split("/");
+// 从模型 key 提取 provider
+function getProvider(modelKey: string): string {
+  const parts = modelKey.split("/");
   return parts.length > 1 ? parts[0] : "other";
 }
 
@@ -31,7 +31,8 @@ function formatContextWindow(size?: number): string {
 function groupByProvider(models: GatewayModel[]): Map<string, GatewayModel[]> {
   const groups = new Map<string, GatewayModel[]>();
   for (const model of models) {
-    const provider = getProvider(model.id);
+    const modelId = String((model as Record<string, unknown>).key || model.id || "");
+    const provider = getProvider(modelId);
     if (!groups.has(provider)) {
       groups.set(provider, []);
     }
@@ -149,13 +150,14 @@ export function ModelSettings({
               {/* 模型列表 */}
               <div className="divide-y divide-zinc-800/50">
                 {providerModels.map((model) => {
-                  const isSelected = defaultModel === model.id;
-                  const displayName = model.name || model.id.split("/").pop() || model.id;
+                  const modelId = model.key || model.id || "";
+                  const isSelected = defaultModel === modelId;
+                  const displayName = model.name || modelId.split("/").pop() || modelId;
 
                   return (
                     <button
-                      key={model.id}
-                      onClick={() => handleSelectModel(model.id)}
+                      key={modelId}
+                      onClick={() => handleSelectModel(modelId)}
                       className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors
                         ${isSelected
                           ? "bg-blue-500/10 border-l-2 border-l-blue-500"
@@ -180,7 +182,7 @@ export function ModelSettings({
                             </span>
                           )}
                           {/* 图片输入标签 */}
-                          {model.input?.includes("image") && (
+                          {(model.input?.includes("image")) && (
                             <span className="px-1.5 py-0.5 text-[10px] rounded bg-green-500/20 text-green-400">
                               image
                             </span>

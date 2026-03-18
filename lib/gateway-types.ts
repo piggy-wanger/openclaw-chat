@@ -95,9 +95,10 @@ export type ChallengeEvent = {
 
 // Gateway 模型信息
 export type GatewayModel = {
-  id: string;           // e.g. "zai/glm-5" or "openai-codex/gpt-5.4"
-  name?: string;        // 显示名称
-  input?: string[];     // 输入类型 ["text", "image"]
+  id?: string;           // 兼容字段
+  key?: string;          // 主键，格式 "provider/model"
+  name?: string;         // 显示名称
+  input?: string;        // 输入类型 "text+image" 或 "text"
   contextWindow?: number;
   maxTokens?: number;
   reasoning?: boolean;
