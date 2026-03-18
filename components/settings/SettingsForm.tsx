@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useMemo } from "react";
 import { useSettings, type FontSize } from "@/hooks/useSettings";
 import { useGateway, type GatewayStatus } from "@/hooks/useGateway";
 import { useSession } from "@/hooks/useSession";
@@ -24,8 +23,6 @@ type SettingsFormInnerProps = {
   initialGatewayUrl: string;
   initialGatewayToken: string;
   initialDefaultModel: string | null;
-  initialApiUrl: string;
-  initialApiKey: string;
   initialMessageFontSize: FontSize;
   initialCodeFontSize: FontSize;
   setSettings: (settings: Partial<{
@@ -42,6 +39,7 @@ type SettingsFormInnerProps = {
   updateSettings: (settings: Record<string, string>) => Promise<boolean>;
   status: GatewayStatus;
   connect: (url: string, token: string) => Promise<void>;
+  client: typeof import("@/lib/gateway").gateway;
 };
 
 function SettingsFormInner({
@@ -49,36 +47,15 @@ function SettingsFormInner({
   initialGatewayUrl,
   initialGatewayToken,
   initialDefaultModel,
-  initialApiUrl,
-  initialApiKey,
   initialMessageFontSize,
   initialCodeFontSize,
   setSettings,
   updateSettings,
   status,
   connect,
+  client,
 }: SettingsFormInnerProps) {
   const { sessions, fetchSessions } = useSession();
-
-  // 从 sessions 中提取可用模型列表
-  const availableModels = useMemo(() => {
-    const modelSet = new Set<string>();
-    sessions.forEach((s) => {
-      if (s.model && s.model !== "unknown") {
-        modelSet.add(s.model);
-      }
-    });
-    const presetModels = new Map(AVAILABLE_MODELS.map((m) => [m.value, m.label]));
-    const allModels = [...AVAILABLE_MODELS];
-
-    modelSet.forEach((model) => {
-      if (!presetModels.has(model)) {
-        allModels.push({ value: model, label: model });
-      }
-    });
-
-    return allModels;
-  }, [sessions]);
 
   const renderContent = () => {
     switch (activeCategory) {
@@ -96,10 +73,9 @@ function SettingsFormInner({
         return (
           <ModelSettings
             defaultModel={initialDefaultModel}
-            availableModels={availableModels}
-            initialApiUrl={initialApiUrl}
-            initialApiKey={initialApiKey}
             updateSettings={updateSettings}
+            client={client}
+            gatewayStatus={status}
           />
         );
       case "appearance":
@@ -133,7 +109,7 @@ function SettingsFormInner({
 
 export function SettingsForm({ activeCategory }: { activeCategory: SettingsCategory }) {
   const { settings, setSettings, updateSettings, loading } = useSettings();
-  const { status, connect } = useGateway();
+  const { status, connect, client } = useGateway();
 
   // 加载中显示占位内容
   if (loading) {
@@ -153,14 +129,13 @@ export function SettingsForm({ activeCategory }: { activeCategory: SettingsCateg
       initialGatewayUrl={settings.gatewayUrl || ""}
       initialGatewayToken={settings.gatewayToken || ""}
       initialDefaultModel={settings.default_model || AVAILABLE_MODELS[0].value}
-      initialApiUrl={settings.api_url || ""}
-      initialApiKey={settings.api_key || ""}
       initialMessageFontSize={settings.messageFontSize}
       initialCodeFontSize={settings.codeFontSize}
       setSettings={setSettings}
       updateSettings={updateSettings}
       status={status}
       connect={connect}
+      client={client}
     />
   );
 }

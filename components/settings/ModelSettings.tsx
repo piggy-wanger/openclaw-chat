@@ -1,142 +1,206 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
-
-const AVAILABLE_MODELS = [
-  { value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
-  { value: "claude-opus-4-20250514", label: "Claude Opus 4" },
-  { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
-  { value: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku" },
-];
+import type { GatewayModel } from "@/lib/gateway-types";
+import type { GatewayStatus } from "@/hooks/useGateway";
+import type { GatewayClient } from "@/lib/gateway-client";
 
 type ModelSettingsProps = {
   defaultModel: string | null;
-  availableModels: { value: string; label: string }[];
-  initialApiUrl: string;
-  initialApiKey: string;
   updateSettings: (settings: Record<string, string>) => Promise<boolean>;
+  client: GatewayClient | null;
+  gatewayStatus: GatewayStatus;
 };
+
+// 从模型 ID 提取 provider
+function getProvider(modelId: string): string {
+  const parts = modelId.split("/");
+  return parts.length > 1 ? parts[0] : "other";
+}
+
+// 格式化 context window 大小
+function formatContextWindow(size?: number): string {
+  if (!size) return "";
+  if (size >= 1000000) return `${(size / 1000000).toFixed(0)}M`;
+  if (size >= 1000) return `${(size / 1000).toFixed(0)}K`;
+  return String(size);
+}
+
+// 按 provider 分组模型
+function groupByProvider(models: GatewayModel[]): Map<string, GatewayModel[]> {
+  const groups = new Map<string, GatewayModel[]>();
+  for (const model of models) {
+    const provider = getProvider(model.id);
+    if (!groups.has(provider)) {
+      groups.set(provider, []);
+    }
+    groups.get(provider)!.push(model);
+  }
+  return groups;
+}
 
 export function ModelSettings({
   defaultModel,
-  availableModels,
-  initialApiUrl,
-  initialApiKey,
   updateSettings,
+  client,
+  gatewayStatus,
 }: ModelSettingsProps) {
-  const [apiUrl, setApiUrl] = useState(initialApiUrl);
-  const [apiKey, setApiKey] = useState(initialApiKey);
+  const [models, setModels] = useState<GatewayModel[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // 合并预设模型和从 sessions 提取的模型
-  const presetModels = new Map(AVAILABLE_MODELS.map((m) => [m.value, m.label]));
-  const allModels = [...AVAILABLE_MODELS];
+  const isConnected = gatewayStatus === "connected";
 
-  availableModels.forEach((model) => {
-    if (!presetModels.has(model.value)) {
-      allModels.push(model);
+  // 加载模型列表
+  useEffect(() => {
+    if (!isConnected || !client) {
+      return;
     }
-  });
 
-  const handleModelChange = async (value: string | null) => {
-    const success = await updateSettings({ default_model: value || "" });
+    setLoading(true);
+    client
+      .modelsList()
+      .then((result) => {
+        setModels(result);
+      })
+      .catch((error) => {
+        console.error("Failed to load models:", error);
+        toast.error("加载模型列表失败");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [isConnected, client]);
+
+  // 断开连接时清空模型列表
+  useEffect(() => {
+    if (!isConnected) {
+      setModels([]);
+    }
+  }, [isConnected]);
+
+  // 按 provider 分组
+  const providerGroups = useMemo(() => groupByProvider(models), [models]);
+
+  // 选择模型
+  const handleSelectModel = async (modelId: string) => {
+    const success = await updateSettings({ default_model: modelId });
     if (success) {
-      toast.success("默认模型已保存");
+      toast.success("默认模型已更新");
     } else {
       toast.error("保存失败，请重试");
     }
   };
 
-  const handleUrlBlur = useCallback(async () => {
-    if (apiUrl !== initialApiUrl) {
-      const success = await updateSettings({ api_url: apiUrl });
-      if (success) {
-        toast.success("API URL 已保存");
-      } else {
-        toast.error("保存失败，请重试");
-      }
-    }
-  }, [apiUrl, initialApiUrl, updateSettings]);
+  // 未连接时显示提示
+  if (!isConnected) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold text-white mb-1">模型设置</h2>
+          <p className="text-sm text-zinc-500">配置默认模型</p>
+        </div>
+        <div className="flex items-center justify-center py-12 text-zinc-500">
+          <p>请先连接 Gateway</p>
+        </div>
+      </div>
+    );
+  }
 
-  const handleKeyBlur = useCallback(async () => {
-    if (apiKey !== initialApiKey) {
-      const success = await updateSettings({ api_key: apiKey });
-      if (success) {
-        toast.success("API Key 已保存");
-      } else {
-        toast.error("保存失败，请重试");
-      }
-    }
-  }, [apiKey, initialApiKey, updateSettings]);
+  // 加载中
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold text-white mb-1">模型设置</h2>
+          <p className="text-sm text-zinc-500">配置默认模型</p>
+        </div>
+        <div className="flex items-center justify-center py-12 text-zinc-500">
+          <p>加载模型列表中...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-white mb-1">模型与 API</h2>
-        <p className="text-sm text-zinc-500">配置默认模型和 API 连接</p>
+        <h2 className="text-lg font-semibold text-white mb-1">模型设置</h2>
+        <p className="text-sm text-zinc-500">点击模型设为默认模型</p>
       </div>
 
-      {/* 默认模型 */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-300">默认模型</label>
-        <Select
-          value={defaultModel || undefined}
-          onValueChange={handleModelChange}
-        >
-          <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-300">
-            <SelectValue placeholder="选择默认模型" />
-          </SelectTrigger>
-          <SelectContent>
-            {allModels.map((model) => (
-              <SelectItem key={model.value} value={model.value}>
-                {model.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-zinc-500">新建会话时使用的默认模型</p>
-      </div>
+      {providerGroups.size === 0 ? (
+        <div className="flex items-center justify-center py-12 text-zinc-500">
+          <p>暂无可用模型</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {Array.from(providerGroups.entries()).map(([provider, providerModels]) => (
+            <div
+              key={provider}
+              className="rounded-lg border border-zinc-800 overflow-hidden"
+            >
+              {/* Provider 标题 */}
+              <div className="px-4 py-2 bg-zinc-800/50 border-b border-zinc-800">
+                <h3 className="text-sm font-medium text-zinc-300">{provider}</h3>
+                <p className="text-xs text-zinc-500">{providerModels.length} 个模型</p>
+              </div>
 
-      <div className="border-t border-zinc-800" />
+              {/* 模型列表 */}
+              <div className="divide-y divide-zinc-800/50">
+                {providerModels.map((model) => {
+                  const isSelected = defaultModel === model.id;
+                  const displayName = model.name || model.id.split("/").pop() || model.id;
 
-      {/* API URL */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-300">API URL</label>
-        <Input
-          value={apiUrl}
-          onChange={(e) => setApiUrl(e.target.value)}
-          onBlur={handleUrlBlur}
-          placeholder="https://api.anthropic.com"
-          className="bg-zinc-800 border-zinc-700 text-zinc-300"
-        />
-        <p className="text-xs text-zinc-500">
-          API 基础 URL（可选，用于自定义代理）
-        </p>
-      </div>
+                  return (
+                    <button
+                      key={model.id}
+                      onClick={() => handleSelectModel(model.id)}
+                      className={`w-full text-left px-4 py-3 flex items-center gap-3 transition-colors
+                        ${isSelected
+                          ? "bg-blue-500/10 border-l-2 border-l-blue-500"
+                          : "hover:bg-zinc-800/30 border-l-2 border-l-transparent"
+                        }`}
+                    >
+                      {/* 选中指示器 */}
+                      <div
+                        className={`w-2 h-2 rounded-full flex-shrink-0
+                          ${isSelected ? "bg-blue-500" : "bg-transparent"}`}
+                      />
 
-      {/* API Key */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-300">API Key</label>
-        <Input
-          type="password"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          onBlur={handleKeyBlur}
-          placeholder="sk-ant-..."
-          className="bg-zinc-800 border-zinc-700 text-zinc-300"
-        />
-        <p className="text-xs text-zinc-500">
-          API 密钥（本地存储，不会上传到服务器）
-        </p>
-      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-zinc-200 truncate">
+                            {displayName}
+                          </span>
+                          {/* Reasoning 标签 */}
+                          {model.reasoning && (
+                            <span className="px-1.5 py-0.5 text-[10px] rounded bg-purple-500/20 text-purple-400">
+                              reasoning
+                            </span>
+                          )}
+                          {/* 图片输入标签 */}
+                          {model.input?.includes("image") && (
+                            <span className="px-1.5 py-0.5 text-[10px] rounded bg-green-500/20 text-green-400">
+                              image
+                            </span>
+                          )}
+                        </div>
+                        {/* Context window */}
+                        {model.contextWindow && (
+                          <p className="text-xs text-zinc-500 mt-0.5">
+                            {formatContextWindow(model.contextWindow)} context
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

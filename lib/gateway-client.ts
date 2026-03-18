@@ -11,6 +11,7 @@ import type {
   GatewayConnectionConfig,
   GatewayEventMap,
   GatewayHello,
+  GatewayModel,
   RpcRequest,
   RpcResponse,
   SessionEntry,
@@ -468,6 +469,14 @@ export class GatewayClient {
    */
   chatHistory(opts: ChatHistoryOpts): Promise<unknown[]> {
     return this.request("chat.history", opts as Record<string, unknown>);
+  }
+
+  /**
+   * 获取可用模型列表
+   */
+  async modelsList(): Promise<GatewayModel[]> {
+    const result = await this.request<{ models?: GatewayModel[] }>("models.list", {});
+    return Array.isArray(result?.models) ? result.models : [];
   }
 
   /**

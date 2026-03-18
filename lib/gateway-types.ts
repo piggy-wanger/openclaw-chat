@@ -93,6 +93,23 @@ export type ChallengeEvent = {
   nonce: string;
 };
 
+// Gateway 模型信息
+export type GatewayModel = {
+  id: string;           // e.g. "zai/glm-5" or "openai-codex/gpt-5.4"
+  name?: string;        // 显示名称
+  input?: string[];     // 输入类型 ["text", "image"]
+  contextWindow?: number;
+  maxTokens?: number;
+  reasoning?: boolean;
+  cost?: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+  };
+  tags?: string[];
+};
+
 // Gateway Hello 消息（connect 响应的 payload）
 export type GatewayHello = {
   serverVersion: string;
