@@ -140,8 +140,15 @@ export function useChat(sessionId: string | null) {
     setStreamContent("");
   }, []);
 
-  // sessionId 变化时自动获取消息
+  // sessionId 变化时自动获取消息（中断旧流）
   useEffect(() => {
+    // 中断旧会话的流式请求
+    if (abortControllerRef.current) {
+      abortControllerRef.current();
+      abortControllerRef.current = null;
+    }
+    setIsStreaming(false);
+    setStreamContent("");
     fetchMessages();
   }, [fetchMessages]);
 
