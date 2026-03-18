@@ -212,6 +212,9 @@ export class GatewayClient {
     this.connectionState = "disconnected";
     this.ws = null;
 
+    // 清理所有待处理的请求，避免内存泄漏
+    this.cleanup();
+
     if (wasConnected) {
       this.emit("disconnect", event.reason || `Code: ${event.code}`);
     }
@@ -228,10 +231,16 @@ export class GatewayClient {
   // ==================== 消息处理 ====================
 
   private handleHello(hello: GatewayHello): void {
+    const wasReconnecting = this.reconnectAttempts > 0;
     this.connectionState = "connected";
     this.reconnectAttempts = 0;
 
     this.emit("hello", hello);
+
+    // 如果是重连成功，emit reconnect 事件
+    if (wasReconnecting) {
+      this.emit("reconnect");
+    }
 
     if (this.readyResolve) {
       this.readyResolve();
