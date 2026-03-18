@@ -71,3 +71,22 @@ export type ErrorResponse = {
   error: string;
   status: number;
 };
+
+// Tool Call Types
+export type ToolCallStatus = "running" | "success" | "error";
+
+export type ToolCall = {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+  status: ToolCallStatus;
+  result?: string;
+  error?: string;
+  startedAt?: number;
+  completedAt?: number;
+};
+
+// Extended Message type with tool calls
+export type MessageWithToolCalls = Message & {
+  toolCalls?: ToolCall[];
+};
