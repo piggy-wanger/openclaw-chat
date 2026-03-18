@@ -65,12 +65,12 @@
 - [x] 事件订阅系统（chat delta/final/error, agent tool/lifecycle）
 - [x] 类型定义（gateway-types.ts）
 
-### Hooks 重构
-- [ ] useGateway: WebSocket 连接生命周期
-- [ ] useSession: 对接 sessions.list/sessions.patch
-- [ ] useChat: 对接 chat.send + chat 事件流
-- [ ] useSettings: Gateway URL + Token 存取
-- [ ] 移除对 HTTP API routes 的依赖
+### Hooks 重构 ✅
+- [x] useGateway: WebSocket 连接生命周期
+- [x] useSession: 对接 sessions.list/sessions.patch
+- [x] useChat: 对接 chat.send + chat 事件流
+- [x] useSettings: Gateway URL + Token 存取
+- [x] 移除对 HTTP API routes 的依赖
 
 ### Chat Flow 对接
 - [ ] Session 列表从 Gateway 加载
