@@ -225,6 +225,7 @@ export class GatewayClient {
   }
 
   private onError(_event: Event): void {
+    void _event; // Explicitly ignore unused parameter
     this.emit("error", new Error("WebSocket error"));
   }
 
