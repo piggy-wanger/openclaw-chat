@@ -511,6 +511,20 @@ export class GatewayClient {
     return this.request("sessions.reset", { key, reason });
   }
 
+  /**
+   * 获取配置
+   */
+  configGet(): Promise<{ config: Record<string, unknown>; baseHash: string }> {
+    return this.request("config.get", {});
+  }
+
+  /**
+   * 设置配置
+   */
+  configSet(baseHash: string, patch: Record<string, unknown>): Promise<{ baseHash: string }> {
+    return this.request("config.set", { baseHash, patch });
+  }
+
   // ==================== 事件订阅 ====================
 
   /**
