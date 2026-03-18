@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useGateway } from "@/hooks/useGateway";
 import { SessionProvider, useSession } from "@/hooks/useSession";
 import { ChatProvider, useChat } from "@/hooks/useChat";
-import { Sidebar } from "@/components/sidebar/Sidebar";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { Sidebar, type SidebarRef } from "@/components/sidebar/Sidebar";
 import { ChatHeader } from "@/components/chat/ChatHeader";
 import { MessageList } from "@/components/chat/MessageList";
 import { InputArea } from "@/components/chat/InputArea";
@@ -16,9 +17,77 @@ import {
   AlertCircle,
   WifiOff,
   Loader2,
+  Settings,
+  Send,
 } from "lucide-react";
-
+import { toast } from "sonner";
 import Link from "next/link";
+
+// 消息列表骨架屏
+function MessageListSkeleton() {
+  return (
+    <div className="flex-1 p-4 space-y-4">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div
+          key={i}
+          className={`flex ${i % 2 === 0 ? "justify-start" : "justify-end"}`}
+        >
+          <div
+            className={`h-16 rounded-2xl animate-pulse ${
+              i % 2 === 0 ? "bg-zinc-800 w-[60%]" : "bg-blue-900/30 w-[40%]"
+            }`}
+            style={{ animationDelay: `${i * 150}ms` }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// 空状态组件
+function NotConnectedState() {
+  return (
+    <div className="flex-1 flex items-center justify-center text-zinc-500">
+      <div className="text-center">
+        <WifiOff className="h-16 w-16 mx-auto mb-4 opacity-50" />
+        <h2 className="text-xl font-medium mb-2 text-zinc-400">未连接到 Gateway</h2>
+        <p className="text-zinc-500 mb-4">请先配置 Gateway 连接</p>
+        <Link href="/settings">
+          <Button variant="outline" className="gap-2">
+            <Settings className="h-4 w-4" />
+            前往设置
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function NoSessionState() {
+  return (
+    <div className="flex-1 flex items-center justify-center text-zinc-500">
+      <div className="text-center">
+        <MessageSquare className="h-16 w-16 mx-auto mb-4 opacity-50" />
+        <h2 className="text-xl font-medium mb-2 text-zinc-400">欢迎使用 OpenClaw Chat</h2>
+        <p className="text-zinc-500 mb-4">点击左侧 &quot;新建会话&quot; 按钮开始对话</p>
+        <p className="text-xs text-zinc-600">快捷键: Ctrl+N 新建会话</p>
+      </div>
+    </div>
+  );
+}
+
+function NoMessagesState() {
+  return (
+    <div className="flex-1 flex items-center justify-center text-zinc-500">
+      <div className="text-center">
+        <Send className="h-16 w-16 mx-auto mb-4 opacity-50" />
+        <h2 className="text-xl font-medium mb-2 text-zinc-400">开始新对话</h2>
+        <p className="text-zinc-500 mb-4">在下方输入您的问题，开始与 AI 对话</p>
+        <p className="text-xs text-zinc-600">发送第一条消息开始</p>
+      </div>
+    </div>
+  );
+}
 
 // 连接状态指示器
 function ConnectionStatus() {
@@ -86,6 +155,7 @@ function ChatArea({
     sessions,
     currentSessionId,
     currentSession,
+    loading: sessionLoading,
     createSession,
     updateSession,
     deleteSession,
@@ -96,13 +166,43 @@ function ChatArea({
     messages,
     isStreaming,
     streamContent,
-    loading,
+    loading: messageLoading,
     error,
     sendMessage,
     abortStream,
     fetchMessages,
     toolCalls,
   } = useChat();
+
+  const sidebarRef = useRef<SidebarRef>(null);
+  const prevErrorRef = useRef<string | null>(null);
+
+  // Error toast when error changes
+  useEffect(() => {
+    if (error && error !== prevErrorRef.current) {
+      toast.error(error);
+    }
+    prevErrorRef.current = error;
+  }, [error]);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onFocusSearch: useCallback(() => {
+      sidebarRef.current?.focusSearch();
+    }, []),
+    onNewSession: useCallback(async () => {
+      await createSession();
+      if (isMobile) {
+        setSidebarOpen(false);
+      }
+    }, [createSession, isMobile, setSidebarOpen]),
+    onCloseModal: useCallback(() => {
+      // Close sidebar on mobile when pressing Escape
+      if (isMobile && sidebarOpen) {
+        setSidebarOpen(false);
+      }
+    }, [isMobile, sidebarOpen, setSidebarOpen]),
+  });
 
   const handleCreateSession = async () => {
     await createSession();
@@ -151,8 +251,10 @@ function ChatArea({
   // Sidebar 内容
   const sidebarContent = (
     <Sidebar
+      ref={sidebarRef}
       sessions={sessions}
       currentSessionId={currentSessionId}
+      loading={sessionLoading}
       onSelectSession={handleSelectSession}
       onRenameSession={handleRenameSession}
       onDeleteSession={handleDeleteSession}
@@ -213,34 +315,34 @@ function ChatArea({
               )}
 
               {/* 消息列表 */}
-              <MessageList
-                messages={messages}
-                isStreaming={isStreaming}
-                streamContent={streamContent}
-                loading={loading}
-                toolCalls={toolCalls}
-              />
+              {messageLoading ? (
+                <MessageListSkeleton />
+              ) : messages.length === 0 && !isStreaming ? (
+                <NoMessagesState />
+              ) : (
+                <MessageList
+                  messages={messages}
+                  isStreaming={isStreaming}
+                  streamContent={streamContent}
+                  loading={messageLoading}
+                  toolCalls={toolCalls}
+                />
+              )}
 
               {/* 输入区域 */}
               <InputArea
                 onSend={handleSendMessage}
                 isStreaming={isStreaming}
                 onAbort={handleAbortStream}
-                disabled={loading}
+                disabled={messageLoading}
               />
             </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-zinc-500">
-              <div className="text-center">
-                <MessageSquare className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <h2 className="text-xl font-medium mb-2">
-                  欢迎使用 OpenClaw Chat
-                </h2>
-                <p className="text-zinc-400">
-                  点击左侧 &quot;新建会话&quot; 按钮开始对话
-                </p>
-              </div>
+          ) : sessionLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
             </div>
+          ) : (
+            <NoSessionState />
           )}
         </div>
       </div>
@@ -275,6 +377,7 @@ function SessionAndChat({
 function MainContent() {
   const [isMobile, setIsMobile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { status } = useGateway();
 
   // 检测移动端
   useEffect(() => {
@@ -285,6 +388,18 @@ function MainContent() {
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
+
+  // 未连接时显示空状态
+  if (status !== "connected") {
+    return (
+      <div className="flex h-screen bg-zinc-950">
+        <ConnectionStatus />
+        <div className="flex flex-1 overflow-hidden">
+          <NotConnectedState />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-zinc-950">
