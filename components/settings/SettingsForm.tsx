@@ -8,7 +8,6 @@ import { ConnectionSettings } from "./ConnectionSettings";
 import { ModelSettings } from "./ModelSettings";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { SessionSettings } from "./SessionSettings";
-import { ApiSettings } from "./ApiSettings";
 import { AboutSettings } from "./AboutSettings";
 
 const AVAILABLE_MODELS = [
@@ -18,7 +17,7 @@ const AVAILABLE_MODELS = [
   { value: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku" },
 ];
 
-export type SettingsCategory = "connection" | "model" | "appearance" | "session" | "api" | "about";
+export type SettingsCategory = "connection" | "model" | "appearance" | "session" | "about";
 
 type SettingsFormInnerProps = {
   activeCategory: SettingsCategory;
@@ -98,6 +97,8 @@ function SettingsFormInner({
           <ModelSettings
             defaultModel={initialDefaultModel}
             availableModels={availableModels}
+            initialApiUrl={initialApiUrl}
+            initialApiKey={initialApiKey}
             updateSettings={updateSettings}
           />
         );
@@ -114,14 +115,6 @@ function SettingsFormInner({
           <SessionSettings
             sessions={sessions}
             fetchSessions={fetchSessions}
-          />
-        );
-      case "api":
-        return (
-          <ApiSettings
-            apiUrl={initialApiUrl}
-            apiKey={initialApiKey}
-            updateSettings={updateSettings}
           />
         );
       case "about":

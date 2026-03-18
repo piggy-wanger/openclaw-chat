@@ -8,7 +8,6 @@ import {
   Brain,
   Palette,
   MessageSquare,
-  Key,
   Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,10 +17,9 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS: { key: SettingsCategory; label: string; icon: typeof Wifi }[] = [
   { key: "connection", label: "连接", icon: Wifi },
-  { key: "model", label: "模型", icon: Brain },
+  { key: "model", label: "模型与 API", icon: Brain },
   { key: "appearance", label: "外观", icon: Palette },
   { key: "session", label: "会话", icon: MessageSquare },
-  { key: "api", label: "API", icon: Key },
   { key: "about", label: "关于", icon: Info },
 ];
 
