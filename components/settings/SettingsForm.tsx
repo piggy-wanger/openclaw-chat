@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useSettings } from "@/hooks/useSettings";
-import { useGateway } from "@/hooks/useGateway";
+import { useGateway, type GatewayStatus } from "@/hooks/useGateway";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,7 +28,7 @@ const AVAILABLE_MODELS = [
 ];
 
 // 连接状态指示器组件
-function ConnectionStatusIndicator({ status }: { status: string }) {
+function ConnectionStatusIndicator({ status }: { status: GatewayStatus }) {
   if (status === "connected") {
     return (
       <div className="flex items-center gap-2 text-green-500">
@@ -96,16 +96,25 @@ function SettingsFormInner({
   const [apiKey, setApiKey] = useState(() => initialApiKey);
   const [saving, setSaving] = useState(false);
 
-  const { status } = useGateway();
+  const { status, connect } = useGateway();
 
   // 测试连接
-  const handleTestConnection = useCallback(() => {
-    // 更新 Gateway 设置（这会触发 useGateway 中的自动连接/重连）
+  const handleTestConnection = useCallback(async () => {
+    // 更新 Gateway 设置
     setSettings({
       gatewayUrl,
       gatewayToken,
     });
-  }, [gatewayUrl, gatewayToken, setSettings]);
+
+    // 立即尝试连接
+    try {
+      await connect();
+      toast.success("连接成功");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "连接失败";
+      toast.error(`连接失败: ${message}`);
+    }
+  }, [gatewayUrl, gatewayToken, setSettings, connect]);
 
   // 保存设置
   const handleSave = useCallback(async () => {

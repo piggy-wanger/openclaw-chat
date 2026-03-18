@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { GatewayProvider, useGateway } from "@/hooks/useGateway";
+import { useGateway } from "@/hooks/useGateway";
 import { SessionProvider, useSession } from "@/hooks/useSession";
 import { ChatProvider, useChat } from "@/hooks/useChat";
 import { Sidebar } from "@/components/sidebar/Sidebar";
@@ -306,10 +306,7 @@ function MainContent() {
 }
 
 // 根组件
+// GatewayProvider 已在 layout.tsx 的 Providers 中提供
 export default function Home() {
-  return (
-    <GatewayProvider>
-      <MainContent />
-    </GatewayProvider>
-  );
+  return <MainContent />;
 }

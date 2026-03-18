@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useGateway } from "@/hooks/useGateway";
+import { useGateway, type GatewayStatus } from "@/hooks/useGateway";
 import type { Session } from "@/lib/types";
 
 const AVAILABLE_MODELS = [
@@ -20,7 +20,7 @@ const AVAILABLE_MODELS = [
 ];
 
 // 连接状态小圆点
-function ConnectionDot({ status }: { status: string }) {
+function ConnectionDot({ status }: { status: GatewayStatus }) {
   if (status === "connected") {
     return (
       <span
