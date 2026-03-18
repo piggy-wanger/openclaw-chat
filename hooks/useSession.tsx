@@ -188,19 +188,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setCurrentSessionId(id);
   }, []);
 
-  // 使用 ref 追踪之前的连接状态，避免 fetchSessions 引用变化导致多余重渲染
-  const prevIsConnectedRef = useRef(isConnected);
+  // 使用 ref 追踪是否已经 fetch 过，避免重复 fetch
+  const hasFetchedRef = useRef(false);
 
   // 当连接状态变化时获取会话列表
   useEffect(() => {
-    // 只有连接状态实际变化时才触发
-    if (isConnected && !prevIsConnectedRef.current) {
+    if (isConnected && !hasFetchedRef.current) {
       fetchSessions();
-    } else if (!isConnected && prevIsConnectedRef.current) {
-      // 断开连接时清空会话列表
+      hasFetchedRef.current = true;
+    }
+
+    if (!isConnected) {
+      // 断开连接时重置 ref 并清空会话列表，下次连接时可重新 fetch
+      hasFetchedRef.current = false;
       setSessions([]);
     }
-    prevIsConnectedRef.current = isConnected;
   }, [isConnected, fetchSessions]);
 
   return (
