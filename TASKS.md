@@ -1,5 +1,45 @@
 # OpenClaw Chat - 开发任务清单
 
+## Phase 6.1 - Testing ✅
+
+### 1. Vitest 配置 ✅
+- [x] 创建 `vitest.config.ts`：配置 jsdom 环境、路径别名
+- [x] 在 package.json 添加 test/test:run scripts
+- [x] 创建 `lib/test/setup.ts` (import @testing-library/jest-dom)
+
+### 2. Gateway Client 单元测试 ✅
+- [x] `lib/__tests__/gateway-client.test.ts`
+- [x] 测试 connect/disconnect
+- [x] 测试 RPC request/response 匹配 (mock WebSocket)
+- [x] 测试断线重连逻辑 (指数退避)
+- [x] 测试事件订阅 (on/off/emit)
+
+### 3. useSettings hook 测试 ✅
+- [x] `hooks/__tests__/useSettings.test.tsx`
+- [x] 测试 gatewayUrl/gatewayToken 读写
+- [x] 测试 UI 偏好设置 (theme, sidebarCollapsed)
+- [x] 测试 FontSize 运行时验证
+
+### 4. 工具函数测试 ✅
+- [x] `lib/__tests__/utils.test.ts`
+- [x] 测试 cn() 合并类名
+
+### 5. Gateway 类型测试 ✅
+- [x] `lib/__tests__/gateway-types.test.ts`
+- [x] 测试 ChatEvent/AgentEvent 类型结构
+
+### 文件变更
+- `vitest.config.ts` - 新建
+- `lib/test/setup.ts` - 新建
+- `lib/__tests__/gateway-client.test.ts` - 新建
+- `lib/__tests__/utils.test.ts` - 新建
+- `lib/__tests__/gateway-types.test.ts` - 新建
+- `hooks/__tests__/useSettings.test.tsx` - 新建
+- `package.json` - 添加 test scripts
+- `TASKS.md` - 更新
+
+---
+
 ## Phase 5.2 - UX 改进 ✅
 
 ### 1. 键盘快捷键 ✅
