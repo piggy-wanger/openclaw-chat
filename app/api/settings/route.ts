@@ -59,29 +59,48 @@ export async function PUT(request: Request): Promise<NextResponse<SettingsRespon
     }
 
     // Upsert each setting
-    const now = Date.now();
-    for (const [key, value] of Object.entries(body.settings)) {
-      // Check if setting exists
-      const existing = await db
-        .select()
-        .from(settings)
-        .where(eq(settings.key, key))
-        .limit(1);
+    try {
+      const now = Date.now();
+      for (const [key, value] of Object.entries(body.settings)) {
+        const existing = await db
+          .select()
+          .from(settings)
+          .where(eq(settings.key, key))
+          .limit(1);
 
-      if (existing.length > 0) {
-        // Update existing setting
-        await db
-          .update(settings)
-          .set({ value, updatedAt: now })
-          .where(eq(settings.key, key));
-      } else {
-        // Insert new setting
-        await db.insert(settings).values({
-          key,
-          value,
-          updatedAt: now,
-        });
+        if (existing.length > 0) {
+          await db
+            .update(settings)
+            .set({ value, updatedAt: now })
+            .where(eq(settings.key, key));
+        } else {
+          await db.insert(settings).values({
+            key,
+            value,
+            updatedAt: now,
+          });
+        }
       }
+    } catch (updateError) {
+      console.error("Error upserting settings, restoring from backup:", updateError);
+      // Restore from backup on failure
+      try {
+        if (existsSync(BACKUP_FILE)) {
+          const backupData = JSON.parse(readFileSync(BACKUP_FILE, "utf-8")) as Record<string, string>;
+          for (const [key, value] of Object.entries(backupData)) {
+            await db
+              .update(settings)
+              .set({ value, updatedAt: Date.now() })
+              .where(eq(settings.key, key));
+          }
+        }
+      } catch (restoreError) {
+        console.error("Failed to restore settings from backup:", restoreError);
+      }
+      return NextResponse.json(
+        { error: "Failed to update settings, restored from backup", status: 500 },
+        { status: 500 }
+      );
     }
 
     // Fetch all updated settings
