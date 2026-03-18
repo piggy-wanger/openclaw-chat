@@ -56,19 +56,29 @@
 - [x] Result display (formatted params + markdown result)
 - [x] Collapsible accessibility (aria-controls, id)
 
-## Phase 4: OpenClaw Integration
+## Phase 4: Gateway Integration
 
-### Backend Connection
-- [ ] Configure OpenClaw API client
-- [ ] Implement streaming response handler
-- [ ] Handle tool call data
-- [ ] Error handling and retry logic
+### Gateway Client ✅
+- [x] WebSocket 连接管理（connect/disconnect/reconnect）
+- [x] Protocol v3 握手（auth token, clientName, caps）
+- [x] RPC 方法封装（chat.send, chat.abort, chat.history, sessions.list, sessions.patch, sessions.reset）
+- [x] 事件订阅系统（chat delta/final/error, agent tool/lifecycle）
+- [x] 类型定义（gateway-types.ts）
 
-### Chat Flow
-- [ ] Send message to backend (real integration)
-- [ ] Stream response to UI
-- [ ] Persist messages to database
-- [ ] Handle draft → session conversion
+### Hooks 重构
+- [ ] useGateway: WebSocket 连接生命周期
+- [ ] useSession: 对接 sessions.list/sessions.patch
+- [ ] useChat: 对接 chat.send + chat 事件流
+- [ ] useSettings: Gateway URL + Token 存取
+- [ ] 移除对 HTTP API routes 的依赖
+
+### Chat Flow 对接
+- [ ] Session 列表从 Gateway 加载
+- [ ] 消息从 Gateway 加载（chat.history）
+- [ ] 流式回复实时渲染（chat delta 事件）
+- [ ] 工具调用可视化（agent tool 事件）
+- [ ] Settings 页：Gateway URL + Token + 连接测试
+- [ ] 错误处理 + 断线重连
 
 ## Phase 5: Settings & Polish
 
