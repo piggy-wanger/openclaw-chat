@@ -9,11 +9,14 @@
 | 角色 | 谁 | 职责 |
 |------|-----|------|
 | 编排层（Zoe） | 庸鹿（我） | 拆解需求、写 prompt、派 Agent、监控状态、审查 Review、失败重试 |
-| 执行层 | Codex（ACP） | 写代码、跑测试、提交 PR |
-| Review 层 | Codex（独立会话） | Code Review，发现问题直接评论 |
+| 执行层 | Claude Code（ACP） | 写代码、跑测试、提交 PR |
+| Review 层 | Codex（ACP） | Code Review，发现问题直接在 PR 评论 |
 | 人类 | 旧青年 | 人工 Review 合并、关键决策、提供 API 信息 |
 
-> 注：文章用了 Codex + Claude Code + Gemini 三个 reviewer，目前我们只有 Codex。后续有 Claude Code 可加。
+> 分工理由（来自文章实践）：
+> - Claude Code 前端能力强，权限问题少，适合执行代码编写
+> - Codex 擅长发现边界情况、逻辑错误、竞态条件，误报率低，适合审查
+> - 编排+执行+审查三层分离，互相独立
 
 ---
 
@@ -28,6 +31,22 @@ git init
 # 初始提交
 # 创建 main 分支（如有需要）
 ```
+
+### Step 0.5: tmux Agent 持久工作空间
+
+tmux 是 Agent 的**持久载体**，不是一次性任务窗口：
+
+| tmux session | 用途 | 生命周期 |
+|---|---|---|
+| `claude-executor` | Claude Code 执行层 | 永久保留，复用 |
+| `codex-reviewer` | Codex Review 层 | 永久保留，复用 |
+
+**规则：**
+- 每个 Agent 一个固定 tmux session，不要每个任务建新的
+- Agent 跑完任务后 tmux session 自然退出，下次直接 `tmux send-keys` 发新指令
+- 中途可 `tmux attach` 查看进度、`tmux send-keys` 干预
+- 不需要手动 `tmux kill-session`，不需要把清理 tmux 当流程步骤
+- Step 8 清理只做 `git worktree remove` + `git branch -d`
 
 ---
 
@@ -50,21 +69,20 @@ git init
 ```bash
 # 1. 从 main 创建 worktree + 分支
 cd /home/bowie/projects/openclaw-chat
-git worktree add ../openclaw-chat-phase2a -b feat/phase2a-db-api origin/main
+git worktree add ../openclaw-chat-phase2a -b feat/phase2a-db-api origin/master
 
 # 2. 在 worktree 中安装依赖
 cd ../openclaw-chat-phase2a
-pnpm install  # 或 npm install
+npm install
 
-# 3. 启动 tmux 会话运行 Codex
-tmux new-session -d -s "codex-phase2a" \
-  -c "/home/bowie/projects/openclaw-chat-phase2a" \
-  "codex --approval-mode full-auto '...prompt...'"
+# 3. 在已有的 claude-executor tmux session 中执行
+tmux send-keys -t claude-executor "cd /home/bowie/projects/openclaw-chat-phase2a && claude -p '...prompt...' --print --permission-mode bypassPermissions" Enter
 ```
 
 **关键特性：**
 - 每个 Agent 在独立 worktree 工作，不互相干扰
-- tmux 会话可中途干预：走偏了直接发指令纠正
+- Claude Code 用 `--print --permission-mode bypassPermissions` 全自动执行
+- tmux 会话可中途干预：走偏了直接 `tmux send-keys` 纠正
 - Agent 只拿到完成该任务需要的最小上下文（不过度塞信息）
 
 ### Step 3: 自动监控
@@ -91,28 +109,39 @@ tmux new-session -d -s "codex-phase2a" \
 Agent 完成后：
 ```bash
 cd /home/bowie/projects/openclaw-chat-phase2a
+# 更新 TASKS.md 标记完成项（在 worktree 中，跟功能代码一起提交）
+vi docs/TASKS.md
 git add .
 git commit -m "feat: ..."
 git push origin feat/phase2a-db-api
 gh pr create --fill
 ```
 
+**⚠️ TASKS.md 必须在 worktree 中更新并跟功能代码一起提交推 PR，不要在 merge 后单独更新。**
+
 **⚠️ 注意：PR 创建不等于完成。** "完成"的定义是全部通过下方所有检查。
 
 ### Step 5: 自动化 Code Review
 
-PR 创建后，自动启动 Codex Reviewer 进行 Code Review：
+PR 创建后，在已有的 codex-reviewer tmux session 中启动 Code Review：
 
+```bash
+# 在已有的 codex-reviewer tmux session 中执行
+tmux send-keys -t codex-reviewer "cd /home/bowie/projects/openclaw-chat-phase2a && codex exec '...prompt...'" Enter
 ```
-Reviewer Prompt:
-"Review PR #{pr_number} in /home/bowie/projects/openclaw-chat。
+
+**Reviewer Prompt 模板：**
+```
+"Review PR #{pr_number} in {worktree}。
 检查:
-1. 逻辑错误、边界情况
+1. 逻辑错误、边界情况、竞态条件
 2. 错误处理是否完善
 3. 类型安全
 4. 是否符合 TECH-DESIGN 规范
 5. 性能问题（不必要渲染、内存泄漏等）
-对每个发现的问题，用 gh pr comment 发布评论，标记 severity: critical/major/minor。"
+6. 安全问题
+对每个发现的问题，用 JSON 数组输出 {severity,file,line,description}。
+末尾输出 REVIEW_SUMMARY:PASS 或 REVIEW_SUMMARY:FAIL。"
 ```
 
 **完成标准：**
@@ -151,14 +180,11 @@ gh pr merge {pr_number} --merge
 
 # 切回主仓库，拉取最新
 cd /home/bowie/projects/openclaw-chat
-git pull origin main
+git pull origin master
 
-# 清理 worktree
+# 清理 worktree（tmux 保留，不清除）
 git worktree remove ../openclaw-chat-phase2a
 git branch -d feat/phase2a-db-api
-
-# 清理 tmux
-tmux kill-session -t codex-phase2a
 ```
 
 合并后更新 TASKS.md 标记完成。
@@ -229,7 +255,7 @@ tmux kill-session -t codex-phase2a
   "agents": [
     {
       "id": "phase2a-db-api",
-      "tmuxSession": "codex-phase2a",
+      "tmuxSession": "claude-phase2a",
       "worktree": "/home/bowie/projects/openclaw-chat-phase2a",
       "branch": "feat/phase2a-db-api",
       "status": "running",  // running | completed | failed | reviewing
@@ -267,6 +293,7 @@ tmux kill-session -t codex-phase2a
 | 风险 | 应对 |
 |------|------|
 | Codex 在 tmux 中卡住 | cron 监控检测，kill 并重试 |
+| Claude Code 在 tmux 中卡住 | cron 监控检测，kill 并重试 |
 | worktree 冲突 | 每个任务独立分支，不共享 worktree |
 | Codex 上下文丢失 | prompt 自包含，不依赖会话历史 |
 | build 失败 | Ralph Loop 带错误信息重试 |
