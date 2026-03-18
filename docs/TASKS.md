@@ -83,10 +83,12 @@
 ## Phase 5: Settings & Polish
 
 ### Settings Page
-- [ ] Settings form UI
-- [ ] Model preferences
-- [ ] API configuration
-- [ ] Backup before save logic (file-based)
+- [x] Settings form UI
+- [x] Model preferences (默认模型选择)
+- [x] API configuration
+- [x] UI 偏好设置 (主题标签、消息/代码字体大小)
+- [x] 会话管理 (数量显示、清除、导出)
+- [x] 关于区域 (版本、Gateway 状态、GitHub 链接)
 
 ### UX Improvements
 - [ ] Keyboard shortcuts
