@@ -30,6 +30,7 @@ const CLIENT_VERSION = "0.1.0";
 const MAX_RECONNECT_ATTEMPTS = 10;
 const MAX_RECONNECT_DELAY = 30000;
 const BASE_RECONNECT_DELAY = 1000;
+const CONNECT_TIMEOUT = 10000;
 
 export class GatewayClient {
   private ws: WebSocket | null = null;
@@ -42,8 +43,10 @@ export class GatewayClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connectionState: ConnectionState = "disconnected";
   private readyResolve: (() => void) | null = null;
+  private readyReject: ((error: Error) => void) | null = null;
   private readyPromise: Promise<void> = Promise.resolve();
   private intentionalDisconnect = false;
+  private connectTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ==================== 连接管理 ====================
 
@@ -58,9 +61,21 @@ export class GatewayClient {
     this.config = config;
     this.intentionalDisconnect = false;
     this.connectionState = "connecting";
-    this.readyPromise = new Promise((resolve) => {
+    this.readyPromise = new Promise((resolve, reject) => {
       this.readyResolve = resolve;
+      this.readyReject = reject;
     });
+
+    // 连接超时
+    this.connectTimer = setTimeout(() => {
+      if (this.connectionState === "connecting") {
+        this.readyReject?.(new Error("Connection timed out"));
+        this.readyReject = null;
+        this.readyResolve = null;
+        this.ws?.close();
+        this.connectionState = "disconnected";
+      }
+    }, CONNECT_TIMEOUT);
 
     this.createWebSocket();
 
@@ -89,6 +104,10 @@ export class GatewayClient {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
+    }
+    if (this.connectTimer) {
+      clearTimeout(this.connectTimer);
+      this.connectTimer = null;
     }
 
     // 拒绝所有待处理的请求
@@ -246,6 +265,11 @@ export class GatewayClient {
     if (this.readyResolve) {
       this.readyResolve();
       this.readyResolve = null;
+      this.readyReject = null;
+    }
+    if (this.connectTimer) {
+      clearTimeout(this.connectTimer);
+      this.connectTimer = null;
     }
   }
 
