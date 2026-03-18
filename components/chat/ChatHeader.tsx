@@ -45,6 +45,7 @@ export function ChatHeader({
             variant="ghost"
             size="icon"
             onClick={onToggleSidebar}
+            aria-label="打开侧边栏"
             className="text-zinc-400 hover:text-white"
           >
             {isSidebarOpen ? (

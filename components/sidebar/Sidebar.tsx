@@ -53,15 +53,15 @@ export function Sidebar({
 
       {/* Footer - Settings Button */}
       <div className="border-t border-zinc-800 p-3">
-        <Link href="/settings">
-          <Button
+        <Button asChild
             variant="ghost"
             className="w-full justify-start gap-2 text-zinc-400 hover:text-white hover:bg-zinc-800"
           >
+            <Link href="/settings">
             <Settings className="h-4 w-4" />
             设置
+            </Link>
           </Button>
-        </Link>
       </div>
     </aside>
   );

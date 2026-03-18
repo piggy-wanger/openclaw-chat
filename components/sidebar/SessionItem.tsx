@@ -69,9 +69,10 @@ export function SessionItem({
 
   return (
     <>
-      <div
+      <button
+        type="button"
         className={cn(
-          "group flex items-center gap-2 rounded-lg px-3 py-2 cursor-pointer transition-colors",
+          "group flex items-center gap-2 rounded-lg px-3 py-2 cursor-pointer transition-colors w-full text-left",
           isActive
             ? "bg-zinc-800 text-white"
             : "hover:bg-zinc-800/50 text-zinc-300"
@@ -90,7 +91,7 @@ export function SessionItem({
           onClick={(e) => e.stopPropagation()}
         >
           <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-            <DropdownMenuTrigger className="flex items-center justify-center h-6 w-6 rounded-md hover:bg-zinc-700 transition-colors">
+            <DropdownMenuTrigger aria-label="会话操作" className="flex items-center justify-center h-6 w-6 rounded-md hover:bg-zinc-700 transition-colors">
               <MoreVertical className="h-4 w-4 text-zinc-400" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -108,7 +109,7 @@ export function SessionItem({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </div>
+      </button>
 
       {/* Rename Dialog */}
       <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>

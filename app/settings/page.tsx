@@ -11,11 +11,11 @@ export default function SettingsPage() {
       <div className="max-w-2xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
-          <Link href="/">
-            <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-white">
+          <Button asChild variant="ghost" size="icon" className="text-zinc-400 hover:text-white">
+            <Link href="/" aria-label="返回">
               <ChevronLeft className="h-5 w-5" />
-            </Button>
-          </Link>
+            </Link>
+          </Button>
           <h1 className="text-2xl font-bold text-white">设置</h1>
         </div>
 

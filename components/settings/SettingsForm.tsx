@@ -26,15 +26,17 @@ export function SettingsForm() {
   const [apiUrl, setApiUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
-  // 初始化表单值
+  // 初始化表单值（只在 settings 首次加载时执行一次）
   useEffect(() => {
-    if (settings) {
+    if (settings && !initialized) {
       setDefaultModel(settings.default_model || AVAILABLE_MODELS[0].value);
       setApiUrl(settings.api_url || "");
       setApiKey(settings.api_key || "");
+      setInitialized(true);
     }
-  }, [settings]);
+  }, [settings, initialized]);
 
   const handleSave = async () => {
     setSaving(true);
