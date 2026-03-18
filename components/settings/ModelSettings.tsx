@@ -31,8 +31,8 @@ function formatContextWindow(size?: number): string {
 function groupByProvider(models: GatewayModel[]): Map<string, GatewayModel[]> {
   const groups = new Map<string, GatewayModel[]>();
   for (const model of models) {
-    const modelId = String((model as Record<string, unknown>).key || model.id || "");
-    const provider = getProvider(modelId);
+    const provider = model.provider || getProvider(model.key || model.id || "");
+    if (!provider) continue;
     if (!groups.has(provider)) {
       groups.set(provider, []);
     }
@@ -182,7 +182,7 @@ export function ModelSettings({
                             </span>
                           )}
                           {/* 图片输入标签 */}
-                          {(model.input?.includes("image")) && (
+                          {model.input?.includes?.("image") && (
                             <span className="px-1.5 py-0.5 text-[10px] rounded bg-green-500/20 text-green-400">
                               image
                             </span>

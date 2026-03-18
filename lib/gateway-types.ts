@@ -95,10 +95,11 @@ export type ChallengeEvent = {
 
 // Gateway 模型信息
 export type GatewayModel = {
-  id?: string;           // 兼容字段
-  key?: string;          // 主键，格式 "provider/model"
+  id?: string;           // 模型短名称，如 "glm-5"
+  key?: string;          // 完整标识，如 "zai/glm-5"（CLI 格式）
   name?: string;         // 显示名称
-  input?: string;        // 输入类型 "text+image" 或 "text"
+  provider?: string;     // Provider 名称，如 "zai"
+  input?: string | string[];  // 输入类型
   contextWindow?: number;
   maxTokens?: number;
   reasoning?: boolean;
