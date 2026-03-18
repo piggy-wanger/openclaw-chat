@@ -1,5 +1,44 @@
 # OpenClaw Chat - 开发任务清单
 
+## Phase 6.2 - Documentation ✅
+
+### 1. README.md 重写 ✅
+- [x] 项目简介
+- [x] 截图占位符
+- [x] 功能特性列表
+- [x] 技术栈
+- [x] 快速开始
+- [x] 项目结构说明
+- [x] 开发指南
+- [x] 部署指南概要
+- [x] 贡献指南
+- [x] License
+
+### 2. docs/ARCHITECTURE.md ✅
+- [x] 架构图 (ASCII)
+- [x] 前端直连 Gateway WebSocket 设计决策
+- [x] 数据流说明
+- [x] 组件层次
+- [x] Hooks 职责
+- [x] 与 Control UI 的关系
+
+### 3. docs/DEPLOYMENT.md ✅
+- [x] 前置条件
+- [x] 构建步骤
+- [x] 部署方式 1: Gateway 静态文件服务
+- [x] 部署方式 2: 独立 Nginx
+- [x] 部署方式 3: Vercel/Netlify
+- [x] 环境变量说明
+- [x] 常见问题
+
+### 文件变更
+- `README.md` - 重写
+- `docs/ARCHITECTURE.md` - 新建
+- `docs/DEPLOYMENT.md` - 新建
+- `TASKS.md` - 更新
+
+---
+
 ## Phase 5.2 - UX 改进 ✅
 
 ### 1. 键盘快捷键 ✅
