@@ -11,6 +11,22 @@ import {
 // 默认 Gateway URL
 const DEFAULT_GATEWAY_URL = "ws://127.0.0.1:18789";
 
+// Font size types
+export type FontSize = "small" | "medium" | "large";
+
+// Valid FontSize values for runtime validation
+const VALID_FONT_SIZES: readonly FontSize[] = ["small", "medium", "large"];
+
+// Type guard for FontSize
+function isValidFontSize(value: string | null): value is FontSize {
+  return value !== null && VALID_FONT_SIZES.includes(value as FontSize);
+}
+
+// Parse FontSize with fallback
+function parseFontSize(value: string | null, fallback: FontSize = "medium"): FontSize {
+  return isValidFontSize(value) ? value : fallback;
+}
+
 // localStorage keys
 const STORAGE_KEYS = {
   gatewayUrl: "openclaw_gateway_url",
@@ -20,6 +36,8 @@ const STORAGE_KEYS = {
   apiKey: "openclaw_api_key",
   theme: "openclaw_theme",
   sidebarCollapsed: "openclaw_sidebar_collapsed",
+  messageFontSize: "openclaw_message_font_size",
+  codeFontSize: "openclaw_code_font_size",
 } as const;
 
 // Settings 类型（兼容旧版 SettingsForm）
@@ -31,6 +49,8 @@ export type Settings = {
   api_key: string;
   theme: "light" | "dark" | "system";
   sidebarCollapsed: boolean;
+  messageFontSize: FontSize;
+  codeFontSize: FontSize;
 };
 
 // 兼容旧版 SettingsForm 的 settings 类型
@@ -54,6 +74,8 @@ const defaultSettings: Settings = {
   api_key: "",
   theme: "dark",
   sidebarCollapsed: false,
+  messageFontSize: "medium",
+  codeFontSize: "medium",
 };
 
 // Context
@@ -80,6 +102,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         "dark",
       sidebarCollapsed:
         localStorage.getItem(STORAGE_KEYS.sidebarCollapsed) === "true",
+      messageFontSize: parseFontSize(
+        localStorage.getItem(STORAGE_KEYS.messageFontSize)
+      ),
+      codeFontSize: parseFontSize(
+        localStorage.getItem(STORAGE_KEYS.codeFontSize)
+      ),
     };
   });
 
@@ -115,6 +143,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           localStorage.setItem(
             STORAGE_KEYS.sidebarCollapsed,
             String(newSettings.sidebarCollapsed)
+          );
+        }
+        if (newSettings.messageFontSize !== undefined) {
+          localStorage.setItem(
+            STORAGE_KEYS.messageFontSize,
+            newSettings.messageFontSize
+          );
+        }
+        if (newSettings.codeFontSize !== undefined) {
+          localStorage.setItem(
+            STORAGE_KEYS.codeFontSize,
+            newSettings.codeFontSize
           );
         }
       }
@@ -164,6 +204,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.apiKey, "");
       localStorage.setItem(STORAGE_KEYS.theme, "dark");
       localStorage.setItem(STORAGE_KEYS.sidebarCollapsed, "false");
+      localStorage.setItem(STORAGE_KEYS.messageFontSize, "medium");
+      localStorage.setItem(STORAGE_KEYS.codeFontSize, "medium");
     }
   }, []);
 

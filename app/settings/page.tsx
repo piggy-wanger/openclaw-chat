@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingsForm } from "@/components/settings/SettingsForm";
+import { SessionProvider } from "@/hooks/useSession";
 
 export default function SettingsPage() {
   return (
@@ -21,7 +22,9 @@ export default function SettingsPage() {
 
         {/* Settings Form */}
         <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-6">
-          <SettingsForm />
+          <SessionProvider>
+            <SettingsForm />
+          </SessionProvider>
         </div>
       </div>
     </div>
