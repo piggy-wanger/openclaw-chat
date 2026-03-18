@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db, messages, sessions } from "@/db";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import type { ChatRequest, ErrorResponse } from "@/lib/types";
+import type { ChatRequest } from "@/lib/types";
 
 // POST /api/chat/stream - Send a message (streaming mock)
 export async function POST(request: Request): Promise<Response> {

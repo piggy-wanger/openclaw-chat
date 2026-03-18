@@ -31,6 +31,7 @@ export function SettingsForm() {
   // 初始化表单值（只在 settings 首次加载时执行一次）
   useEffect(() => {
     if (settings && !initialized) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDefaultModel(settings.default_model || AVAILABLE_MODELS[0].value);
       setApiUrl(settings.api_url || "");
       setApiKey(settings.api_key || "");

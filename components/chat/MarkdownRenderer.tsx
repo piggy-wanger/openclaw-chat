@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, memo } from "react";
+import { useState, useCallback, useRef, useEffect, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -13,18 +13,29 @@ type MarkdownRendererProps = {
 };
 
 // 代码块复制按钮组件
-function CopyButton({ code }: { code: string }) {
+function CopyButton({ getCode }: { getCode: () => string }) {
   const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleCopy = useCallback(async () => {
     try {
+      const code = getCode();
       await navigator.clipboard.writeText(code);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      timeoutRef.current = setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error("Failed to copy:", err);
     }
-  }, [code]);
+  }, [getCode]);
+
+  // cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <button
@@ -47,23 +58,31 @@ function CodeBlock({
   children,
   ...props
 }: React.HTMLAttributes<HTMLElement> & { children?: React.ReactNode }) {
+  const preRef = useRef<HTMLPreElement>(null);
   const match = /language-(\w+)/.exec(className || "");
   const language = match ? match[1] : "";
-  const codeString = String(children).replace(/\n$/, "");
 
-  // 判断是否是代码块（有语言标记或多行）
-  const isCodeBlock = !!language || codeString.includes("\n");
+  // 从 DOM 获取纯文本代码内容
+  const getCodeText = useCallback(() => {
+    return preRef.current?.textContent || "";
+  }, []);
+
+  // 判断是否是代码块（有语言标记）
+  const isCodeBlock = !!language;
 
   if (!isCodeBlock) {
-    // 行内代码
-    return (
-      <code
-        className="px-1.5 py-0.5 rounded bg-zinc-700/50 text-zinc-200 text-sm font-mono"
-        {...props}
-      >
-        {children}
-      </code>
-    );
+    // 行内代码 - 简单检查是否是多行
+    const childText = typeof children === "string" ? children : "";
+    if (!childText.includes("\n")) {
+      return (
+        <code
+          className="px-1.5 py-0.5 rounded bg-zinc-700/50 text-zinc-200 text-sm font-mono"
+          {...props}
+        >
+          {children}
+        </code>
+      );
+    }
   }
 
   // 代码块
@@ -75,6 +94,7 @@ function CodeBlock({
         </div>
       )}
       <pre
+        ref={preRef}
         className={cn(
           "overflow-x-auto rounded-lg bg-zinc-900 p-4 text-sm",
           language && "pt-8"
@@ -84,7 +104,7 @@ function CodeBlock({
           {children}
         </code>
       </pre>
-      <CopyButton code={codeString} />
+      <CopyButton getCode={getCodeText} />
     </div>
   );
 }

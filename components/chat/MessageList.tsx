@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback, memo } from "react";
+import { useEffect, useRef, useCallback, memo } from "react";
 import { MessageSquare, Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
 import { MessageItem } from "./MessageItem";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import type { Message } from "@/lib/types";
@@ -53,7 +52,10 @@ function MessageListInner({
   loading,
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  // 使用 ref 跟踪滚动状态，避免 effect 中的 setState
+  const shouldAutoScrollRef = useRef(true);
+  const prevIsStreamingRef = useRef(false);
 
   // 滚动到底部
   const scrollToBottom = useCallback(() => {
@@ -62,29 +64,34 @@ function MessageListInner({
     }
   }, []);
 
-  // 处理滚动事件
-  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLDivElement;
-    const { scrollTop, scrollHeight, clientHeight } = target;
-    // 判断是否滚动到底部（允许 50px 误差）
-    const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
-    setShouldAutoScroll(isAtBottom);
+  // 使用 viewport ref 监听滚动事件
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const handleScroll = (e: Event) => {
+      const target = e.currentTarget as HTMLDivElement;
+      const { scrollTop, scrollHeight, clientHeight } = target;
+      // 判断是否滚动到底部（允许 50px 误差）
+      shouldAutoScrollRef.current = scrollHeight - scrollTop - clientHeight < 50;
+    };
+
+    viewport.addEventListener("scroll", handleScroll);
+    return () => viewport.removeEventListener("scroll", handleScroll);
   }, []);
 
   // 消息变化或流式内容更新时自动滚动
   useEffect(() => {
-    if (shouldAutoScroll) {
-      scrollToBottom();
+    // 当 isStreaming 从 false 变为 true 时，强制启用自动滚动
+    if (isStreaming && !prevIsStreamingRef.current) {
+      shouldAutoScrollRef.current = true;
     }
-  }, [messages, streamContent, shouldAutoScroll, scrollToBottom]);
+    prevIsStreamingRef.current = isStreaming;
 
-  // 新消息开始流式时，强制滚动到底部
-  useEffect(() => {
-    if (isStreaming) {
-      setShouldAutoScroll(true);
+    if (shouldAutoScrollRef.current) {
       scrollToBottom();
     }
-  }, [isStreaming, scrollToBottom]);
+  }, [messages, streamContent, isStreaming, scrollToBottom]);
 
   // 显示加载状态
   if (loading) {
@@ -107,7 +114,7 @@ function MessageListInner({
   return (
     <ScrollArea
       className="flex-1 h-full"
-      onScroll={handleScroll}
+      viewportRef={viewportRef}
     >
       <div className="px-4 py-6 md:px-8">
         {messages.map((message) => (

@@ -129,6 +129,7 @@ export function useDraft() {
   useEffect(() => {
     const savedDraft = getItem<Draft>(DRAFT_KEY, EMPTY_DRAFT);
     if (savedDraft) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDraft(savedDraft);
     }
   }, []);
