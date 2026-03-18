@@ -14,6 +14,19 @@ const DEFAULT_GATEWAY_URL = "ws://127.0.0.1:18789";
 // Font size types
 export type FontSize = "small" | "medium" | "large";
 
+// Valid FontSize values for runtime validation
+const VALID_FONT_SIZES: readonly FontSize[] = ["small", "medium", "large"];
+
+// Type guard for FontSize
+function isValidFontSize(value: string | null): value is FontSize {
+  return value !== null && VALID_FONT_SIZES.includes(value as FontSize);
+}
+
+// Parse FontSize with fallback
+function parseFontSize(value: string | null, fallback: FontSize = "medium"): FontSize {
+  return isValidFontSize(value) ? value : fallback;
+}
+
 // localStorage keys
 const STORAGE_KEYS = {
   gatewayUrl: "openclaw_gateway_url",
@@ -89,12 +102,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         "dark",
       sidebarCollapsed:
         localStorage.getItem(STORAGE_KEYS.sidebarCollapsed) === "true",
-      messageFontSize:
-        (localStorage.getItem(STORAGE_KEYS.messageFontSize) as FontSize) ||
-        "medium",
-      codeFontSize:
-        (localStorage.getItem(STORAGE_KEYS.codeFontSize) as FontSize) ||
-        "medium",
+      messageFontSize: parseFontSize(
+        localStorage.getItem(STORAGE_KEYS.messageFontSize)
+      ),
+      codeFontSize: parseFontSize(
+        localStorage.getItem(STORAGE_KEYS.codeFontSize)
+      ),
     };
   });
 

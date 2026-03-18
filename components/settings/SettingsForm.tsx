@@ -48,6 +48,25 @@ const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
   { value: "large", label: "大" },
 ];
 
+// Valid FontSize values for type guard
+const VALID_FONT_SIZES = FONT_SIZE_OPTIONS.map((opt) => opt.value);
+
+// Type guard for FontSize - validates value is a valid FontSize option
+function isValidFontSize(value: string | null): value is FontSize {
+  return value !== null && VALID_FONT_SIZES.includes(value as FontSize);
+}
+
+// Safe FontSize setter wrapper - handles null and invalid values
+function createFontSizeSetter(
+  setter: (value: FontSize) => void
+): (value: string | null) => void {
+  return (value: string | null) => {
+    if (isValidFontSize(value)) {
+      setter(value);
+    }
+  };
+}
+
 // 连接状态指示器组件
 function ConnectionStatusIndicator({ status }: { status: GatewayStatus }) {
   if (status === "connected") {
@@ -356,7 +375,10 @@ function SettingsFormInner({
         {/* 消息字体大小 */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-zinc-300">消息字体大小</label>
-          <Select value={messageFontSize} onValueChange={(v) => setMessageFontSize(v as FontSize)}>
+          <Select
+            value={messageFontSize}
+            onValueChange={createFontSizeSetter(setMessageFontSize)}
+          >
             <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-300">
               <SelectValue />
             </SelectTrigger>
@@ -373,7 +395,10 @@ function SettingsFormInner({
         {/* 代码块字体大小 */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-zinc-300">代码块字体大小</label>
-          <Select value={codeFontSize} onValueChange={(v) => setCodeFontSize(v as FontSize)}>
+          <Select
+            value={codeFontSize}
+            onValueChange={createFontSizeSetter(setCodeFontSize)}
+          >
             <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-300">
               <SelectValue />
             </SelectTrigger>
