@@ -50,10 +50,17 @@ class MockWebSocket {
 
 describe("GatewayClient", () => {
   let client: GatewayClient;
+  let wsSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    // Stub WebSocket globally
-    vi.stubGlobal("WebSocket", MockWebSocket);
+    // Use spyOn to mock WebSocket
+    wsSpy = vi
+      .spyOn(globalThis, "WebSocket")
+      .mockImplementation(
+        function (this: MockWebSocket, url: string) {
+          return Reflect.construct(MockWebSocket, [url], MockWebSocket);
+        } as unknown as typeof WebSocket
+      );
 
     client = new GatewayClient();
     MockWebSocket.instances = [];
@@ -66,8 +73,8 @@ describe("GatewayClient", () => {
     vi.useRealTimers();
     vi.clearAllMocks();
 
-    // Unstub globals to restore original WebSocket
-    vi.unstubAllGlobals();
+    // Restore original WebSocket
+    wsSpy.mockRestore();
   });
 
   describe("connect/disconnect", () => {
