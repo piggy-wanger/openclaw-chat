@@ -135,7 +135,6 @@ OpenClaw Chat 是一个纯前端应用，通过 WebSocket 直连 OpenClaw Gatewa
 
 ```
 Providers (layout.tsx)
-├── ThemeProvider
 ├── SettingsProvider
 └── GatewayProvider
     └── Page (page.tsx)

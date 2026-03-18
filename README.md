@@ -145,7 +145,7 @@ openclaw-chat/
 
 ```bash
 npm run build
-# 将 .next/standalone 或 out/ 目录内容复制到 Gateway 静态目录
+# 将 out/ 目录内容复制到 Gateway 静态目录
 ```
 
 ### 方式 2: 独立 Nginx
