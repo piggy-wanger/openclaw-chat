@@ -4,13 +4,15 @@ import { memo } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-import type { Message } from "@/lib/types";
+import { ToolCallList } from "./ToolCallList";
+import type { Message, ToolCall } from "@/lib/types";
 
 type MessageItemProps = {
   message: Message;
+  toolCalls?: ToolCall[];
 };
 
-function MessageItemInner({ message }: MessageItemProps) {
+function MessageItemInner({ message, toolCalls }: MessageItemProps) {
   const { role, content, createdAt } = message;
 
   // 格式化时间
@@ -47,12 +49,19 @@ function MessageItemInner({ message }: MessageItemProps) {
   }
 
   // assistant 消息：左对齐，深色背景
+  const hasToolCalls = toolCalls && toolCalls.length > 0;
+
   return (
     <div className="flex justify-start mb-4">
       <div className="max-w-[80%] md:max-w-[70%]">
         <div className="bg-zinc-800 text-zinc-100 rounded-2xl rounded-tl-sm px-4 py-2.5">
           <MarkdownRenderer content={content} />
         </div>
+        {hasToolCalls && (
+          <div className="mt-2">
+            <ToolCallList toolCalls={toolCalls} />
+          </div>
+        )}
         <p className="text-xs text-zinc-500 mt-1">{timestamp}</p>
       </div>
     </div>
