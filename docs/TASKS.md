@@ -72,13 +72,13 @@
 - [x] useSettings: Gateway URL + Token 存取
 - [x] 移除对 HTTP API routes 的依赖
 
-### Chat Flow 对接
-- [ ] Session 列表从 Gateway 加载
-- [ ] 消息从 Gateway 加载（chat.history）
-- [ ] 流式回复实时渲染（chat delta 事件）
-- [ ] 工具调用可视化（agent tool 事件）
-- [ ] Settings 页：Gateway URL + Token + 连接测试
-- [ ] 错误处理 + 断线重连
+### Chat Flow 对接 ✅
+- [x] Session 列表从 Gateway 加载
+- [x] 消息从 Gateway 加载（chat.history）
+- [x] 流式回复实时渲染（chat delta 事件）
+- [x] 工具调用可视化（agent tool 事件）
+- [x] Settings 页：Gateway URL + Token + 连接测试
+- [x] 错误处理 + 断线重连
 
 ## Phase 5: Settings & Polish
 

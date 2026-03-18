@@ -18,6 +18,8 @@ import {
   Loader2,
 } from "lucide-react";
 
+import Link from "next/link";
+
 // 连接状态指示器
 function ConnectionStatus() {
   const { status, error } = useGateway();
@@ -45,13 +47,25 @@ function ConnectionStatus() {
       {status === "disconnected" && (
         <>
           <WifiOff className="h-4 w-4" />
-          <span>已断开连接</span>
+          <span>
+            Gateway 连接已断开，请前往{" "}
+            <Link href="/settings" className="underline hover:text-white">
+              设置
+            </Link>
+            {" "}检查配置
+          </span>
         </>
       )}
       {status === "error" && (
         <>
           <AlertCircle className="h-4 w-4" />
-          <span>连接错误: {error}</span>
+          <span>
+            连接错误: {error}，请前往{" "}
+            <Link href="/settings" className="underline hover:text-white">
+              设置
+            </Link>
+            {" "}检查配置
+          </span>
         </>
       )}
     </div>
@@ -87,6 +101,7 @@ function ChatArea({
     sendMessage,
     abortStream,
     fetchMessages,
+    toolCalls,
   } = useChat();
 
   const handleCreateSession = async () => {
@@ -203,6 +218,7 @@ function ChatArea({
                 isStreaming={isStreaming}
                 streamContent={streamContent}
                 loading={loading}
+                toolCalls={toolCalls}
               />
 
               {/* 输入区域 */}
