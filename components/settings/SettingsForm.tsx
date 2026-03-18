@@ -106,9 +106,9 @@ function SettingsFormInner({
       gatewayToken,
     });
 
-    // 立即尝试连接
+    // 直接传入参数连接，避免 React state 异步更新问题
     try {
-      await connect();
+      await connect(gatewayUrl, gatewayToken);
       toast.success("连接成功");
     } catch (err) {
       const message = err instanceof Error ? err.message : "连接失败";
