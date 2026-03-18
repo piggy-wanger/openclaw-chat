@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useSettings } from "@/hooks/useSettings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,27 +20,28 @@ const AVAILABLE_MODELS = [
   { value: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku" },
 ];
 
-export function SettingsForm() {
-  const { settings, updateSettings, loading } = useSettings();
-  const [defaultModel, setDefaultModel] = useState<string | null>(null);
-  const [apiUrl, setApiUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [initialized, setInitialized] = useState(false);
+type SettingsFormInnerProps = {
+  initialDefaultModel: string | null;
+  initialApiUrl: string;
+  initialApiKey: string;
+  onUpdateSettings: (settings: Record<string, string>) => Promise<boolean>;
+};
 
-  // 初始化表单值（只在 settings 首次加载时执行一次）
-  useEffect(() => {
-    if (settings && !initialized) {
-      setDefaultModel(settings.default_model || AVAILABLE_MODELS[0].value);
-      setApiUrl(settings.api_url || "");
-      setApiKey(settings.api_key || "");
-      setInitialized(true);
-    }
-  }, [settings, initialized]);
+// 内部表单组件：使用 props 作为 useState 初始值，避免 useEffect 初始化
+function SettingsFormInner({
+  initialDefaultModel,
+  initialApiUrl,
+  initialApiKey,
+  onUpdateSettings,
+}: SettingsFormInnerProps) {
+  const [defaultModel, setDefaultModel] = useState<string | null>(() => initialDefaultModel);
+  const [apiUrl, setApiUrl] = useState(() => initialApiUrl);
+  const [apiKey, setApiKey] = useState(() => initialApiKey);
+  const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
-    const success = await updateSettings({
+    const success = await onUpdateSettings({
       default_model: defaultModel || "",
       api_url: apiUrl,
       api_key: apiKey,
@@ -106,12 +107,37 @@ export function SettingsForm() {
       <div className="pt-4">
         <Button
           onClick={handleSave}
-          disabled={saving || loading}
+          disabled={saving}
           className="bg-blue-600 hover:bg-blue-700"
         >
           {saving ? "保存中..." : "保存设置"}
         </Button>
       </div>
     </div>
+  );
+}
+
+export function SettingsForm() {
+  const { settings, updateSettings, loading } = useSettings();
+
+  // 加载中显示占位内容
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-10 bg-zinc-800 animate-pulse rounded" />
+        <div className="h-10 bg-zinc-800 animate-pulse rounded" />
+        <div className="h-10 bg-zinc-800 animate-pulse rounded" />
+      </div>
+    );
+  }
+
+  // settings 加载完成后渲染表单，使用 settings 值作为初始值
+  return (
+    <SettingsFormInner
+      initialDefaultModel={settings.default_model || AVAILABLE_MODELS[0].value}
+      initialApiUrl={settings.api_url || ""}
+      initialApiKey={settings.api_key || ""}
+      onUpdateSettings={updateSettings}
+    />
   );
 }

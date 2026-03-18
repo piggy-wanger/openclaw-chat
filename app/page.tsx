@@ -2,10 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "@/hooks/useSession";
+import { useChat } from "@/hooks/useChat";
 import { Sidebar } from "@/components/sidebar/Sidebar";
 import { ChatHeader } from "@/components/chat/ChatHeader";
+import { MessageList } from "@/components/chat/MessageList";
+import { InputArea } from "@/components/chat/InputArea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { MessageSquare } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { MessageSquare, RefreshCw, AlertCircle } from "lucide-react";
 
 export default function Home() {
   const {
@@ -17,6 +21,17 @@ export default function Home() {
     deleteSession,
     selectSession,
   } = useSession();
+
+  const {
+    messages,
+    isStreaming,
+    streamContent,
+    loading,
+    error,
+    sendMessage,
+    abortStream,
+    fetchMessages,
+  } = useChat(currentSessionId);
 
   const [isMobile, setIsMobile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -63,6 +78,18 @@ export default function Home() {
     setSidebarOpen(!sidebarOpen);
   };
 
+  const handleSendMessage = (content: string) => {
+    sendMessage(content);
+  };
+
+  const handleAbortStream = () => {
+    abortStream();
+  };
+
+  const handleRetry = () => {
+    fetchMessages();
+  };
+
   // Sidebar 内容
   const sidebarContent = (
     <Sidebar
@@ -102,17 +129,45 @@ export default function Home() {
           isMobile={isMobile}
         />
 
-        {/* Message List Area - Placeholder for Phase 3.2 */}
-        <div className="flex-1 overflow-auto bg-zinc-950">
+        {/* Message List Area */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-zinc-950">
           {currentSession ? (
-            <div className="flex items-center justify-center h-full text-zinc-500">
-              <div className="text-center">
-                <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>消息列表将在 Phase 3.2 实现</p>
-              </div>
-            </div>
+            <>
+              {/* 错误状态 */}
+              {error && (
+                <div className="flex items-center justify-center gap-3 p-4 bg-red-900/20 border-b border-red-800/50">
+                  <AlertCircle className="h-5 w-5 text-red-400" />
+                  <span className="text-red-300 text-sm">{error}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRetry}
+                    className="ml-2"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    重试
+                  </Button>
+                </div>
+              )}
+
+              {/* 消息列表 */}
+              <MessageList
+                messages={messages}
+                isStreaming={isStreaming}
+                streamContent={streamContent}
+                loading={loading}
+              />
+
+              {/* 输入区域 */}
+              <InputArea
+                onSend={handleSendMessage}
+                isStreaming={isStreaming}
+                onAbort={handleAbortStream}
+                disabled={loading}
+              />
+            </>
           ) : (
-            <div className="flex items-center justify-center h-full text-zinc-500">
+            <div className="flex-1 flex items-center justify-center text-zinc-500">
               <div className="text-center">
                 <MessageSquare className="h-16 w-16 mx-auto mb-4 opacity-50" />
                 <h2 className="text-xl font-medium mb-2">欢迎使用 OpenClaw Chat</h2>
@@ -123,15 +178,6 @@ export default function Home() {
             </div>
           )}
         </div>
-
-        {/* Input Area - Placeholder for Phase 3.2 */}
-        {currentSession && (
-          <div className="border-t border-zinc-800 p-4 bg-zinc-900">
-            <div className="text-center text-zinc-500 text-sm">
-              输入区域将在 Phase 3.2 实现
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
