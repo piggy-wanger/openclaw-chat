@@ -475,8 +475,18 @@ export class GatewayClient {
    * 获取可用模型列表
    */
   async modelsList(): Promise<GatewayModel[]> {
-    const result = await this.request<{ models?: GatewayModel[] }>("models.list", {});
-    return Array.isArray(result?.models) ? result.models : [];
+    try {
+      const result = await this.request<{ models?: GatewayModel[]; count?: number }>("models.list", {});
+      console.log("[models.list] raw result:", JSON.stringify(result).slice(0, 500));
+      const models = result?.models;
+      if (Array.isArray(models)) return models;
+      // 如果 result 本身是数组（某些 Gateway 版本可能直接返回数组）
+      if (Array.isArray(result)) return result as unknown as GatewayModel[];
+      return [];
+    } catch (err) {
+      console.error("[models.list] error:", err);
+      return [];
+    }
   }
 
   /**
