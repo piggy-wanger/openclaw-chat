@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useGateway, type GatewayStatus } from "@/hooks/useGateway";
 import type { Session } from "@/lib/types";
 
 const AVAILABLE_MODELS = [
@@ -17,6 +18,40 @@ const AVAILABLE_MODELS = [
   { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
   { value: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku" },
 ];
+
+// 连接状态小圆点
+function ConnectionDot({ status }: { status: GatewayStatus }) {
+  if (status === "connected") {
+    return (
+      <span
+        className="w-2 h-2 rounded-full bg-green-500"
+        title="已连接"
+      />
+    );
+  }
+  if (status === "connecting") {
+    return (
+      <span
+        className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"
+        title="连接中..."
+      />
+    );
+  }
+  if (status === "error") {
+    return (
+      <span
+        className="w-2 h-2 rounded-full bg-red-500"
+        title="连接错误"
+      />
+    );
+  }
+  return (
+    <span
+      className="w-2 h-2 rounded-full bg-zinc-500"
+      title="未连接"
+    />
+  );
+}
 
 interface ChatHeaderProps {
   currentSession: Session | null;
@@ -33,6 +68,7 @@ export function ChatHeader({
   isSidebarOpen,
   isMobile,
 }: ChatHeaderProps) {
+  const { status } = useGateway();
   const title = currentSession?.title || "OpenClaw Chat";
   const currentModel = currentSession?.model || AVAILABLE_MODELS[0].value;
 
@@ -58,6 +94,8 @@ export function ChatHeader({
         <h2 className="text-lg font-medium text-white truncate max-w-[300px]">
           {title}
         </h2>
+        {/* 连接状态指示器 */}
+        <ConnectionDot status={status} />
       </div>
 
       {/* Model Selector */}

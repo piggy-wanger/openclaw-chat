@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { GatewayProvider, useGateway } from "@/hooks/useGateway";
+import { useGateway } from "@/hooks/useGateway";
 import { SessionProvider, useSession } from "@/hooks/useSession";
 import { ChatProvider, useChat } from "@/hooks/useChat";
 import { Sidebar } from "@/components/sidebar/Sidebar";
@@ -17,6 +17,8 @@ import {
   WifiOff,
   Loader2,
 } from "lucide-react";
+
+import Link from "next/link";
 
 // 连接状态指示器
 function ConnectionStatus() {
@@ -45,13 +47,25 @@ function ConnectionStatus() {
       {status === "disconnected" && (
         <>
           <WifiOff className="h-4 w-4" />
-          <span>已断开连接</span>
+          <span>
+            Gateway 连接已断开，请前往{" "}
+            <Link href="/settings" className="underline hover:text-white">
+              设置
+            </Link>
+            {" "}检查配置
+          </span>
         </>
       )}
       {status === "error" && (
         <>
           <AlertCircle className="h-4 w-4" />
-          <span>连接错误: {error}</span>
+          <span>
+            连接错误: {error}，请前往{" "}
+            <Link href="/settings" className="underline hover:text-white">
+              设置
+            </Link>
+            {" "}检查配置
+          </span>
         </>
       )}
     </div>
@@ -87,6 +101,7 @@ function ChatArea({
     sendMessage,
     abortStream,
     fetchMessages,
+    toolCalls,
   } = useChat();
 
   const handleCreateSession = async () => {
@@ -203,6 +218,7 @@ function ChatArea({
                 isStreaming={isStreaming}
                 streamContent={streamContent}
                 loading={loading}
+                toolCalls={toolCalls}
               />
 
               {/* 输入区域 */}
@@ -290,10 +306,7 @@ function MainContent() {
 }
 
 // 根组件
+// GatewayProvider 已在 layout.tsx 的 Providers 中提供
 export default function Home() {
-  return (
-    <GatewayProvider>
-      <MainContent />
-    </GatewayProvider>
-  );
+  return <MainContent />;
 }

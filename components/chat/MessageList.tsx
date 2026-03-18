@@ -5,13 +5,15 @@ import { MessageSquare, Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageItem } from "./MessageItem";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-import type { Message } from "@/lib/types";
+import { ToolCallList } from "./ToolCallList";
+import type { Message, ToolCall } from "@/lib/types";
 
 type MessageListProps = {
   messages: Message[];
   isStreaming: boolean;
   streamContent: string;
   loading?: boolean;
+  toolCalls?: ToolCall[];
 };
 
 // 流式内容光标动画组件
@@ -50,6 +52,7 @@ function MessageListInner({
   isStreaming,
   streamContent,
   loading,
+  toolCalls = [],
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -129,6 +132,12 @@ function MessageListInner({
                 <MarkdownRenderer content={streamContent} />
                 <StreamingCursor />
               </div>
+              {/* 流式期间显示工具调用 */}
+              {toolCalls.length > 0 && (
+                <div className="mt-2">
+                  <ToolCallList toolCalls={toolCalls} />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -136,8 +145,16 @@ function MessageListInner({
         {/* 流式加载中（无内容） */}
         {isStreaming && !streamContent && (
           <div className="flex justify-start mb-4">
-            <div className="bg-zinc-800 rounded-2xl rounded-tl-sm px-4 py-3">
-              <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+            <div className="max-w-[80%] md:max-w-[70%]">
+              <div className="bg-zinc-800 rounded-2xl rounded-tl-sm px-4 py-3">
+                <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+              </div>
+              {/* 流式期间显示工具调用（即使没有文字内容） */}
+              {toolCalls.length > 0 && (
+                <div className="mt-2">
+                  <ToolCallList toolCalls={toolCalls} />
+                </div>
+              )}
             </div>
           </div>
         )}

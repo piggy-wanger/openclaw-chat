@@ -28,7 +28,7 @@ type GatewayContextType = {
   status: GatewayStatus;
   hello: GatewayHello | null;
   error: string | null;
-  connect: () => Promise<void>;
+  connect: (url?: string, token?: string) => Promise<void>;
   disconnect: () => void;
   isConnected: boolean;
 };
@@ -47,8 +47,12 @@ export function GatewayProvider({ children }: { children: ReactNode }) {
   const prevConfigRef = useRef<{ url: string; token: string } | null>(null);
 
   // 连接到 Gateway
-  const connect = useCallback(async () => {
-    if (!settings.gatewayUrl) {
+  const connect = useCallback(async (urlOverride?: string, tokenOverride?: string) => {
+    // 使用传入的参数或 settings 中的值
+    const url = urlOverride ?? settings.gatewayUrl;
+    const token = tokenOverride ?? settings.gatewayToken;
+
+    if (!url) {
       setError("Gateway URL is not configured");
       setStatus("error");
       return;
@@ -64,8 +68,8 @@ export function GatewayProvider({ children }: { children: ReactNode }) {
 
     try {
       await gateway.connect({
-        url: settings.gatewayUrl,
-        token: settings.gatewayToken || undefined,
+        url,
+        token: token || undefined,
       });
     } catch (err) {
       const message =
