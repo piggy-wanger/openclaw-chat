@@ -49,12 +49,18 @@ export function ChatProvider({
   // 当前运行的 runId
   const currentRunIdRef = useRef<string | null>(null);
 
+  // Session epoch 用于防止竞态条件
+  const sessionEpochRef = useRef(0);
+
   // 获取会话消息
   const fetchMessages = useCallback(async () => {
     if (!sessionId || !isConnected) {
       setMessages([]);
       return;
     }
+
+    // 捕获当前 epoch
+    const currentEpoch = sessionEpochRef.current;
 
     setLoading(true);
     setError(null);
@@ -63,6 +69,11 @@ export function ChatProvider({
         sessionKey: sessionId,
         limit: 100,
       });
+
+      // 检查 epoch 是否匹配，不匹配则丢弃结果（session 已切换）
+      if (currentEpoch !== sessionEpochRef.current) {
+        return;
+      }
 
       // 转换历史记录为 Message 格式
       // history 是 unknown[]，需要根据实际格式解析
@@ -88,12 +99,19 @@ export function ChatProvider({
 
       setMessages(formattedMessages);
     } catch (err) {
+      // 检查 epoch 是否匹配
+      if (currentEpoch !== sessionEpochRef.current) {
+        return;
+      }
       const message =
         err instanceof Error ? err.message : "Failed to fetch messages";
       setError(message);
       console.error("Error fetching messages:", err);
     } finally {
-      setLoading(false);
+      // 检查 epoch 是否匹配
+      if (currentEpoch === sessionEpochRef.current) {
+        setLoading(false);
+      }
     }
   }, [sessionId, client, isConnected]);
 
@@ -297,6 +315,9 @@ export function ChatProvider({
 
   // sessionId 变化时：中断旧请求，清理事件监听，获取新消息
   useEffect(() => {
+    // 递增 epoch 以使旧的 fetchMessages 结果失效
+    sessionEpochRef.current++;
+
     // 中断旧的流式请求
     if (currentRunIdRef.current) {
       abortStream();

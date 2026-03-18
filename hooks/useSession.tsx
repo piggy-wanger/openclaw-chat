@@ -7,6 +7,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   type ReactNode,
 } from "react";
 import { useGateway } from "./useGateway";
@@ -187,14 +188,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setCurrentSessionId(id);
   }, []);
 
+  // 使用 ref 追踪之前的连接状态，避免 fetchSessions 引用变化导致多余重渲染
+  const prevIsConnectedRef = useRef(isConnected);
+
   // 当连接状态变化时获取会话列表
   useEffect(() => {
-    if (isConnected) {
+    // 只有连接状态实际变化时才触发
+    if (isConnected && !prevIsConnectedRef.current) {
       fetchSessions();
-    } else {
+    } else if (!isConnected && prevIsConnectedRef.current) {
       // 断开连接时清空会话列表
       setSessions([]);
     }
+    prevIsConnectedRef.current = isConnected;
   }, [isConnected, fetchSessions]);
 
   return (
