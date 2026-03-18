@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, type ReactNode } from "react";
+import { useState, useCallback, useId, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 type CollapsibleProps = {
@@ -27,6 +27,7 @@ import { createContext, useContext } from "react";
 type CollapsibleContextType = {
   isOpen: boolean;
   toggle: () => void;
+  contentId: string;
 };
 
 const CollapsibleContext = createContext<CollapsibleContextType | null>(null);
@@ -42,16 +43,17 @@ function useCollapsible() {
 function Collapsible({ children, defaultOpen = false, className }: CollapsibleProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const toggle = useCallback(() => setIsOpen((prev) => !prev), []);
+  const contentId = useId();
 
   return (
-    <CollapsibleContext.Provider value={{ isOpen, toggle }}>
+    <CollapsibleContext.Provider value={{ isOpen, toggle, contentId }}>
       <div className={cn("w-full", className)}>{children}</div>
     </CollapsibleContext.Provider>
   );
 }
 
 function CollapsibleTrigger({ children, className, onClick }: CollapsibleTriggerProps) {
-  const { isOpen, toggle } = useCollapsible();
+  const { isOpen, toggle, contentId } = useCollapsible();
 
   const handleClick = () => {
     toggle();
@@ -64,6 +66,7 @@ function CollapsibleTrigger({ children, className, onClick }: CollapsibleTrigger
       onClick={handleClick}
       className={cn("w-full text-left", className)}
       aria-expanded={isOpen}
+      aria-controls={contentId}
     >
       {children}
     </button>
@@ -71,11 +74,15 @@ function CollapsibleTrigger({ children, className, onClick }: CollapsibleTrigger
 }
 
 function CollapsibleContent({ children, className }: CollapsibleContentProps) {
-  const { isOpen } = useCollapsible();
+  const { isOpen, contentId } = useCollapsible();
 
   if (!isOpen) return null;
 
-  return <div className={className}>{children}</div>;
+  return (
+    <div id={contentId} className={className}>
+      {children}
+    </div>
+  );
 }
 
 export { Collapsible, CollapsibleTrigger, CollapsibleContent, useCollapsible };

@@ -12,6 +12,7 @@ import {
   Collapsible,
   CollapsibleTrigger,
   CollapsibleContent,
+  useCollapsible,
 } from "@/components/ui/collapsible";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,19 @@ function StatusIcon({ status }: { status: ToolCall["status"] }) {
     case "error":
       return <XCircle className="h-4 w-4 text-red-500 flex-shrink-0" />;
   }
+}
+
+// Chevron icon that rotates based on collapsible state
+function CollapsibleChevron() {
+  const { isOpen } = useCollapsible();
+  return (
+    <ChevronRight
+      className={cn(
+        "h-4 w-4 text-zinc-500 transition-transform duration-200",
+        isOpen && "rotate-90"
+      )}
+    />
+  );
 }
 
 // Format duration from timestamps
@@ -67,7 +81,7 @@ function ToolCallCardInner({ toolCall }: ToolCallCardProps) {
           "text-left"
         )}
       >
-        <ChevronRight className="h-4 w-4 text-zinc-500 transition-transform duration-200 data-[state=open]:rotate-90" />
+        <CollapsibleChevron />
         <StatusIcon status={status} />
         <span className="text-sm font-medium text-zinc-200 truncate flex-1">
           {name}
