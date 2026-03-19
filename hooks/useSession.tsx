@@ -94,6 +94,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       console.log("[fetchSessions] Gateway returned", entries.length, "sessions:", entries.map(e => ({ key: e.key, title: e.title, origin: e.origin, kind: e.kind })));
       // 转换为 Session 类型并按 updatedAt 降序排列
       const sessionList = entries
+        .filter(e => e.origin != null)
         .map(sessionEntryToSession)
         .sort((a, b) => b.updatedAt - a.updatedAt);
       console.log("[fetchSessions] Mapped to", sessionList.length, "sessions:", sessionList.map(s => ({ id: s.id, title: s.title, type: s.type })));
