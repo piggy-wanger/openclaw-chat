@@ -4,9 +4,11 @@ import {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
   useState,
   useCallback,
   useMemo,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import type { ThemeFamilyMeta, ThemeMode } from "./types";
@@ -18,6 +20,46 @@ const THEME_MODE_KEY = "openclaw-chat-theme-mode";
 
 // Default theme (tokyo-night as per requirements)
 const DEFAULT_FAMILY_ID = "tokyo-night";
+
+// Helper to read initial values from localStorage (safe for SSR)
+function getInitialFamilyId(defaultId: string): string {
+  if (typeof window === "undefined") return defaultId;
+  const saved = localStorage.getItem(THEME_FAMILY_KEY);
+  if (saved) {
+    const families = getThemeFamilyMetas();
+    if (families.some((f) => f.id === saved)) {
+      return saved;
+    }
+  }
+  return defaultId;
+}
+
+function getInitialMode(): ThemeMode {
+  if (typeof window === "undefined") return "dark";
+  const saved = localStorage.getItem(THEME_MODE_KEY);
+  if (saved && ["light", "dark", "system"].includes(saved)) {
+    return saved as ThemeMode;
+  }
+  return "dark";
+}
+
+// System preference subscription using useSyncExternalStore
+function subscribeToSystemPreference(callback: () => void): () => void {
+  const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  mediaQuery.addEventListener("change", callback);
+  return () => mediaQuery.removeEventListener("change", callback);
+}
+
+function getSystemPreferenceSnapshot(): "light" | "dark" {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function getSystemPreferenceServerSnapshot(): "dark" {
+  return "dark";
+}
+
+// useLayoutEffect that only runs on client (SSR safe)
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 /** Theme context value. */
 export interface ThemeContextValue {
@@ -63,54 +105,22 @@ export function ThemeProvider({
   // Available families (static)
   const families = useMemo(() => getThemeFamilyMetas(), []);
 
-  // State for current family and mode
-  const [familyId, setFamilyIdState] = useState<string>(defaultFamilyId);
-  const [mode, setModeState] = useState<ThemeMode>("dark");
-  const [mounted, setMounted] = useState(false);
+  // Initialize state directly from localStorage (avoids lint warning about setState in effect)
+  const [familyId, setFamilyIdState] = useState<string>(() => getInitialFamilyId(defaultFamilyId));
+  const [mode, setModeState] = useState<ThemeMode>(getInitialMode);
 
-  // Resolve system preference
-  const getSystemPreference = useCallback((): "light" | "dark" => {
-    if (typeof window === "undefined") return "dark";
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  }, []);
+  // Use useSyncExternalStore for system preference (React-recommended pattern)
+  const systemPreference = useSyncExternalStore(
+    subscribeToSystemPreference,
+    getSystemPreferenceSnapshot,
+    getSystemPreferenceServerSnapshot
+  );
 
-  // Resolved mode
-  const resolvedMode = mode === "system" ? getSystemPreference() : mode;
+  // Resolved mode - uses systemPreference which updates on OS changes
+  const resolvedMode = mode === "system" ? systemPreference : mode;
 
-  // Load saved preferences on mount
-  useEffect(() => {
-    const savedFamily = localStorage.getItem(THEME_FAMILY_KEY);
-    const savedMode = localStorage.getItem(THEME_MODE_KEY) as ThemeMode | null;
-
-    if (savedFamily && families.some((f) => f.id === savedFamily)) {
-      setFamilyIdState(savedFamily);
-    }
-
-    if (savedMode && ["light", "dark", "system"].includes(savedMode)) {
-      setModeState(savedMode);
-    }
-
-    setMounted(true);
-  }, [families]);
-
-  // Listen for system preference changes
-  useEffect(() => {
-    if (mode !== "system") return;
-
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleChange = () => {
-      // Force re-render to update resolvedMode
-      setModeState("system");
-    };
-
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
-  }, [mode]);
-
-  // Apply theme colors when family or mode changes
-  useEffect(() => {
-    if (!mounted) return;
-
+  // Apply theme colors using isomorphic layout effect (client-only, before paint)
+  useIsomorphicLayoutEffect(() => {
     const family = getThemeFamily(familyId);
     if (family) {
       const colors = resolvedMode === "light" ? family.light : family.dark;
@@ -119,12 +129,10 @@ export function ThemeProvider({
       // Fallback to default colors
       applyThemeColors(getFallbackColors(resolvedMode));
     }
-  }, [familyId, resolvedMode, mounted]);
+  }, [familyId, resolvedMode]);
 
-  // Update document class for light/dark mode
-  useEffect(() => {
-    if (!mounted) return;
-
+  // Update document class for light/dark mode (client-only)
+  useIsomorphicLayoutEffect(() => {
     const root = document.documentElement;
     if (resolvedMode === "dark") {
       root.classList.add("dark");
@@ -133,7 +141,7 @@ export function ThemeProvider({
       root.classList.add("light");
       root.classList.remove("dark");
     }
-  }, [resolvedMode, mounted]);
+  }, [resolvedMode]);
 
   // Set theme family
   const setFamily = useCallback(

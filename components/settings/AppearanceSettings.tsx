@@ -68,13 +68,13 @@ export function AppearanceSettings({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-white mb-1">外观设置</h2>
-        <p className="text-sm text-zinc-500">自定义界面显示偏好</p>
+        <h2 className="text-lg font-semibold text-foreground mb-1">外观设置</h2>
+        <p className="text-sm text-muted-foreground">自定义界面显示偏好</p>
       </div>
 
       {/* 主题配色选择 */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-zinc-300">主题配色</label>
+        <label className="text-sm font-medium text-foreground">主题配色</label>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {families.map((family) => {
             const isSelected = family.id === familyId;
@@ -86,8 +86,8 @@ export function AppearanceSettings({
                 onClick={() => handleFamilyChange(family.id)}
                 className={`relative flex flex-col items-start p-3 rounded-lg border-2 transition-all text-left ${
                   isSelected
-                    ? "border-zinc-400 bg-zinc-800/50"
-                    : "border-zinc-700 bg-zinc-800/30 hover:border-zinc-600 hover:bg-zinc-800/50"
+                    ? "border-primary bg-card/50"
+                    : "border-border bg-card/30 hover:border-border hover:bg-card/50"
                 }`}
               >
                 {/* Preview color swatches */}
@@ -115,14 +115,14 @@ export function AppearanceSettings({
                     />
                   </div>
                 )}
-                <span className="text-sm font-medium text-zinc-200">{family.label}</span>
+                <span className="text-sm font-medium text-foreground">{family.label}</span>
                 {family.description && (
-                  <span className="text-xs text-zinc-500 mt-0.5 line-clamp-1">
+                  <span className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
                     {family.description}
                   </span>
                 )}
                 {isSelected && (
-                  <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-zinc-400" />
+                  <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary" />
                 )}
               </button>
             );
@@ -132,7 +132,7 @@ export function AppearanceSettings({
 
       {/* 模式切换 */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-zinc-300">显示模式</label>
+        <label className="text-sm font-medium text-foreground">显示模式</label>
         <div className="flex gap-2">
           {MODE_OPTIONS.map((opt) => {
             const isActive = mode === opt.value;
@@ -142,8 +142,8 @@ export function AppearanceSettings({
                 onClick={() => setMode(opt.value)}
                 className={`px-4 py-2 text-sm rounded-md border transition-all ${
                   isActive
-                    ? "bg-zinc-700 border-zinc-600 text-white"
-                    : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300"
+                    ? "bg-muted border-border text-foreground"
+                    : "bg-card border-border text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
                 {opt.label}
@@ -155,9 +155,9 @@ export function AppearanceSettings({
 
       {/* 消息字体大小 */}
       <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-300">消息字体大小</label>
+        <label className="text-sm font-medium text-foreground">消息字体大小</label>
         <Select value={messageFontSize} onValueChange={handleMessageFontSizeChange}>
-          <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-300">
+          <SelectTrigger className="bg-card border-border text-foreground">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -172,9 +172,9 @@ export function AppearanceSettings({
 
       {/* 代码块字体大小 */}
       <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-300">代码块字体大小</label>
+        <label className="text-sm font-medium text-foreground">代码块字体大小</label>
         <Select value={codeFontSize} onValueChange={handleCodeFontSizeChange}>
-          <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-300">
+          <SelectTrigger className="bg-card border-border text-foreground">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
