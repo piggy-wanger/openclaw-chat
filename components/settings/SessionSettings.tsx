@@ -165,13 +165,15 @@ export function SessionSettings({
     let successCount = 0;
     let failCount = 0;
 
+    // Import gateway once outside the loop
+    const { gateway } = await import("@/lib/gateway");
+
     for (const session of sessions) {
       // 跳过临时会话
       if (session.id.startsWith("temp-")) {
         continue;
       }
       try {
-        const { gateway } = await import("@/lib/gateway");
         await gateway.sessionsReset(session.id);
         successCount++;
       } catch {

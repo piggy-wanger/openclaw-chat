@@ -144,6 +144,11 @@ function InputAreaInner({
       if (showMentionPopup) {
         const agents = filteredAgents();
 
+        // Prevent division by zero when agents array is empty
+        if (agents.length === 0) {
+          return;
+        }
+
         if (e.key === "ArrowDown") {
           e.preventDefault();
           setSelectedIndex((prev) => (prev + 1) % agents.length);

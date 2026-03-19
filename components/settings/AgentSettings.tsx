@@ -79,6 +79,30 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
 
   const isConnected = gatewayStatus === "connected";
 
+  // Validate avatar URL to prevent XSS - only allow https:// and data:image/ URIs
+  const validateAvatarUrl = useCallback((url: string): string | null => {
+    const trimmed = url.trim();
+    if (!trimmed) return null;
+
+    // Allow data:image/ URIs (base64 encoded images)
+    if (trimmed.startsWith("data:image/")) {
+      return trimmed;
+    }
+
+    // Allow https:// URLs only
+    if (trimmed.startsWith("https://")) {
+      try {
+        new URL(trimmed);
+        return trimmed;
+      } catch {
+        return null;
+      }
+    }
+
+    // Reject javascript: and other protocols
+    return null;
+  }, []);
+
   // 加载 Agent 列表
   const loadAgents = useCallback(async () => {
     if (!isConnected || !client) return;
@@ -255,6 +279,11 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
       toast.error("请输入模型 ID");
       return;
     }
+    // Validate avatar URL if provided
+    if (formData.avatar && !validateAvatarUrl(formData.avatar)) {
+      toast.error("头像 URL 仅支持 https:// 或 data:image/ 格式");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -311,6 +340,11 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     }
     if (!model.trim()) {
       toast.error("请输入模型 ID");
+      return;
+    }
+    // Validate avatar URL if provided
+    if (formData.avatar && !validateAvatarUrl(formData.avatar)) {
+      toast.error("头像 URL 仅支持 https:// 或 data:image/ 格式");
       return;
     }
 
@@ -641,13 +675,34 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
               {/* Fallback: 文本输入 (emoji 或 URL) */}
               <Input
                 value={formData.emoji}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    emoji: e.target.value,
-                    avatar: "", // 清空头像
-                  }))
-                }
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Check if input looks like a URL
+                  if (value.startsWith("https://") || value.startsWith("data:")) {
+                    const validatedUrl = validateAvatarUrl(value);
+                    if (validatedUrl) {
+                      setFormData((prev) => ({
+                        ...prev,
+                        emoji: "",
+                        avatar: validatedUrl,
+                      }));
+                    } else {
+                      // Invalid URL - keep as emoji text (will be rejected on submit or show error)
+                      setFormData((prev) => ({
+                        ...prev,
+                        emoji: value,
+                        avatar: "",
+                      }));
+                    }
+                  } else {
+                    // Regular emoji or text
+                    setFormData((prev) => ({
+                      ...prev,
+                      emoji: value,
+                      avatar: "",
+                    }));
+                  }
+                }}
                 placeholder="或直接输入 emoji / 头像 URL"
                 className="bg-muted border-border text-foreground text-sm"
               />
@@ -822,13 +877,34 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
               {/* Fallback: 文本输入 (emoji 或 URL) */}
               <Input
                 value={formData.emoji}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    emoji: e.target.value,
-                    avatar: "", // 清空头像
-                  }))
-                }
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Check if input looks like a URL
+                  if (value.startsWith("https://") || value.startsWith("data:")) {
+                    const validatedUrl = validateAvatarUrl(value);
+                    if (validatedUrl) {
+                      setFormData((prev) => ({
+                        ...prev,
+                        emoji: "",
+                        avatar: validatedUrl,
+                      }));
+                    } else {
+                      // Invalid URL - keep as emoji text (will be rejected on submit or show error)
+                      setFormData((prev) => ({
+                        ...prev,
+                        emoji: value,
+                        avatar: "",
+                      }));
+                    }
+                  } else {
+                    // Regular emoji or text
+                    setFormData((prev) => ({
+                      ...prev,
+                      emoji: value,
+                      avatar: "",
+                    }));
+                  }
+                }}
                 placeholder="或直接输入 emoji / 头像 URL"
                 className="bg-muted border-border text-foreground text-sm"
               />
