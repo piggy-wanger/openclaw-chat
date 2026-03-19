@@ -228,6 +228,8 @@ export function ChatProvider({
   // 处理 chat 事件
   useEffect(() => {
     const handleChat = (event: ChatEvent) => {
+      console.log("[chat event]", event.state, "sessionKey:", event.sessionKey, "current:", sessionId, "match:", event.sessionKey === sessionId);
+
       // 检查是否是临时会话
       const isTempSession = sessionId?.startsWith("temp-");
 
