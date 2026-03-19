@@ -107,6 +107,8 @@ export function ChatProvider({
         limit: 100,
       });
 
+      console.log("[fetchMessages] raw history:", JSON.stringify(history).slice(0, 1000));
+
       // history 返回 { messages: [...] }，需要取 .messages
       const historyData = history as unknown as Record<string, unknown>;
       const messagesArr = Array.isArray(historyData?.messages) ? historyData.messages : Array.isArray(history) ? history : [];
@@ -274,6 +276,7 @@ export function ChatProvider({
             // 没有流式内容，从 final message 提取
             const rawMessage = event.message;
             if (rawMessage) {
+              console.log("[chat.final] raw message:", JSON.stringify(rawMessage).slice(0, 500));
               // Extract raw content from message
               const rawContent = typeof rawMessage === "object" && rawMessage !== null && "content" in (rawMessage as Record<string, unknown>)
                 ? (rawMessage as Record<string, unknown>).content
@@ -338,6 +341,7 @@ export function ChatProvider({
       // agent.assistant 事件携带增量 delta（Gateway 不发 chat.delta）
       if (event.stream === "assistant" && event.data) {
         const delta = (event.data as Record<string, unknown>).delta;
+        console.log("[agent.assistant] raw event.data:", JSON.stringify(event.data).slice(0, 500));
         if (typeof delta === "string" && delta.trim() && !delta.startsWith("NO_REPLY")) {
           setIsStreaming(true);
           setStreamContent((prev) => {
