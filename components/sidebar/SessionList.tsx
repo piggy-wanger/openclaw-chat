@@ -54,21 +54,21 @@ export const SessionList = forwardRef<HTMLInputElement, SessionListProps>(
     return (
       <div className="flex flex-col flex-1 min-h-0">
         {/* 搜索输入框 */}
-        <div className="px-3 py-2 border-b border-zinc-800">
+        <div className="px-3 py-2 border-b border-border">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               ref={searchInputRef}
               type="text"
               placeholder="搜索会话... (Ctrl+K)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-8 h-8 bg-zinc-800 border-zinc-700 text-sm placeholder:text-zinc-500 focus-visible:ring-blue-500"
+              className="pl-9 pr-8 h-8 bg-muted border-border text-sm placeholder:text-muted-foreground focus-visible:ring-primary"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-500 hover:text-zinc-300"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -80,14 +80,14 @@ export const SessionList = forwardRef<HTMLInputElement, SessionListProps>(
         <ScrollArea className="flex-1 h-0">
           <div className="space-y-4 p-2">
             {hasNoResults ? (
-              <div className="px-3 py-8 text-sm text-zinc-500 text-center">
+              <div className="px-3 py-8 text-sm text-muted-foreground text-center">
                 未找到会话
               </div>
             ) : (
               <>
                 {/* 直接聊天分组 */}
                 <div>
-                  <h3 className="px-3 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                  <h3 className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     直接聊天
                   </h3>
                   <div className="space-y-1">
@@ -102,7 +102,7 @@ export const SessionList = forwardRef<HTMLInputElement, SessionListProps>(
                       />
                     ))}
                     {directSessions.length === 0 && !loading && (
-                      <div className="px-3 py-4 text-sm text-zinc-500 text-center">
+                      <div className="px-3 py-4 text-sm text-muted-foreground text-center">
                         暂无会话
                       </div>
                     )}
@@ -112,7 +112,7 @@ export const SessionList = forwardRef<HTMLInputElement, SessionListProps>(
                 {/* 群聊分组 - 仅在有群聊时显示 */}
                 {groupSessions.length > 0 && (
                   <div>
-                    <h3 className="px-3 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                    <h3 className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       群聊
                     </h3>
                     <div className="space-y-1">

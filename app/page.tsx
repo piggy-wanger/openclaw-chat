@@ -34,7 +34,7 @@ function MessageListSkeleton() {
         >
           <div
             className={`h-16 rounded-2xl animate-pulse ${
-              i % 2 === 0 ? "bg-zinc-800 w-[60%]" : "bg-blue-900/30 w-[40%]"
+              i % 2 === 0 ? "bg-muted w-[60%]" : "bg-blue-900/30 w-[40%]"
             }`}
             style={{ animationDelay: `${i * 150}ms` }}
           />
@@ -47,11 +47,11 @@ function MessageListSkeleton() {
 // 空状态组件
 function NotConnectedState() {
   return (
-    <div className="flex-1 flex items-center justify-center text-zinc-500">
+    <div className="flex-1 flex items-center justify-center text-muted-foreground">
       <div className="text-center">
         <WifiOff className="h-16 w-16 mx-auto mb-4 opacity-50" />
-        <h2 className="text-xl font-medium mb-2 text-zinc-400">未连接到 Gateway</h2>
-        <p className="text-zinc-500 mb-4">请先配置 Gateway 连接</p>
+        <h2 className="text-xl font-medium mb-2 text-muted-foreground">未连接到 Gateway</h2>
+        <p className="text-muted-foreground mb-4">请先配置 Gateway 连接</p>
         <Link href="/settings">
           <Button variant="outline" className="gap-2">
             <Settings className="h-4 w-4" />
@@ -65,12 +65,12 @@ function NotConnectedState() {
 
 function NoSessionState() {
   return (
-    <div className="flex-1 flex items-center justify-center text-zinc-500">
+    <div className="flex-1 flex items-center justify-center text-muted-foreground">
       <div className="text-center">
         <MessageSquare className="h-16 w-16 mx-auto mb-4 opacity-50" />
-        <h2 className="text-xl font-medium mb-2 text-zinc-400">欢迎使用 OpenClaw Chat</h2>
-        <p className="text-zinc-500 mb-4">点击左侧 &quot;新建会话&quot; 按钮开始对话</p>
-        <p className="text-xs text-zinc-600">快捷键: Ctrl+N 新建会话</p>
+        <h2 className="text-xl font-medium mb-2 text-muted-foreground">欢迎使用 OpenClaw Chat</h2>
+        <p className="text-muted-foreground mb-4">点击左侧 &quot;新建会话&quot; 按钮开始对话</p>
+        <p className="text-xs text-muted-foreground">快捷键: Ctrl+N 新建会话</p>
       </div>
     </div>
   );
@@ -78,12 +78,12 @@ function NoSessionState() {
 
 function NoMessagesState() {
   return (
-    <div className="flex-1 flex items-center justify-center text-zinc-500">
+    <div className="flex-1 flex items-center justify-center text-muted-foreground">
       <div className="text-center">
         <Send className="h-16 w-16 mx-auto mb-4 opacity-50" />
-        <h2 className="text-xl font-medium mb-2 text-zinc-400">开始新对话</h2>
-        <p className="text-zinc-500 mb-4">在下方输入您的问题，开始与 AI 对话</p>
-        <p className="text-xs text-zinc-600">发送第一条消息开始</p>
+        <h2 className="text-xl font-medium mb-2 text-muted-foreground">开始新对话</h2>
+        <p className="text-muted-foreground mb-4">在下方输入您的问题，开始与 AI 对话</p>
+        <p className="text-xs text-muted-foreground">发送第一条消息开始</p>
       </div>
     </div>
   );
@@ -118,7 +118,7 @@ function ConnectionStatus() {
           <WifiOff className="h-4 w-4" />
           <span>
             Gateway 连接已断开，请前往{" "}
-            <Link href="/settings" className="underline hover:text-white">
+            <Link href="/settings" className="underline hover:text-foreground">
               设置
             </Link>
             {" "}检查配置
@@ -130,7 +130,7 @@ function ConnectionStatus() {
           <AlertCircle className="h-4 w-4" />
           <span>
             连接错误: {error}，请前往{" "}
-            <Link href="/settings" className="underline hover:text-white">
+            <Link href="/settings" className="underline hover:text-foreground">
               设置
             </Link>
             {" "}检查配置
@@ -272,7 +272,7 @@ function ChatArea({
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
           <SheetContent
             side="left"
-            className="p-0 w-[280px] bg-zinc-900 border-r border-zinc-800"
+            className="p-0 w-[280px] bg-card border-r border-border"
             showCloseButton={false}
           >
             <SheetHeader className="sr-only">
@@ -294,7 +294,7 @@ function ChatArea({
         />
 
         {/* Message List Area */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-zinc-950">
+        <div className="flex-1 flex flex-col overflow-hidden bg-background">
           {currentSession ? (
             <>
               {/* 错误状态 */}
@@ -339,7 +339,7 @@ function ChatArea({
             </>
           ) : sessionLoading ? (
             <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
             <NoSessionState />
@@ -392,7 +392,7 @@ function MainContent() {
   // 未连接时显示空状态
   if (status !== "connected") {
     return (
-      <div className="flex h-screen bg-zinc-950">
+      <div className="flex h-screen bg-background">
         <ConnectionStatus />
         <div className="flex flex-1 overflow-hidden">
           <NotConnectedState />
@@ -402,7 +402,7 @@ function MainContent() {
   }
 
   return (
-    <div className="flex h-screen bg-zinc-950">
+    <div className="flex h-screen bg-background">
       {/* 连接状态 */}
       <ConnectionStatus />
 

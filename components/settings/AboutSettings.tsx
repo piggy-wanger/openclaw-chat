@@ -38,7 +38,7 @@ function ConnectionStatusIndicator({ status }: { status: GatewayStatus }) {
     );
   }
   return (
-    <div className="flex items-center gap-2 text-zinc-500">
+    <div className="flex items-center gap-2 text-muted-foreground">
       <Circle className="h-4 w-4" />
       <span className="text-sm">未连接</span>
     </div>
@@ -53,26 +53,26 @@ export function AboutSettings({ status }: AboutSettingsProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-white mb-1">关于</h2>
-        <p className="text-sm text-zinc-500">OpenClaw Chat 应用信息</p>
+        <h2 className="text-lg font-semibold text-foreground mb-1">关于</h2>
+        <p className="text-sm text-muted-foreground">OpenClaw Chat 应用信息</p>
       </div>
 
       <div className="space-y-4">
         {/* 版本 */}
-        <div className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg border border-zinc-800">
-          <span className="text-sm text-zinc-400">版本</span>
-          <span className="text-sm text-zinc-300">{APP_VERSION}</span>
+        <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
+          <span className="text-sm text-muted-foreground">版本</span>
+          <span className="text-sm text-foreground">{APP_VERSION}</span>
         </div>
 
         {/* Gateway 状态 */}
-        <div className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg border border-zinc-800">
-          <span className="text-sm text-zinc-400">Gateway 状态</span>
+        <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
+          <span className="text-sm text-muted-foreground">Gateway 状态</span>
           <ConnectionStatusIndicator status={status} />
         </div>
 
         {/* GitHub */}
-        <div className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg border border-zinc-800">
-          <span className="text-sm text-zinc-400">GitHub</span>
+        <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
+          <span className="text-sm text-muted-foreground">GitHub</span>
           <a
             href="https://github.com/piggy-wanger/openclaw-chat"
             target="_blank"

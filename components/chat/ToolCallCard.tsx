@@ -27,7 +27,7 @@ function StatusIcon({ status }: { status: ToolCall["status"] }) {
   switch (status) {
     case "running":
       return (
-        <Loader2 className="h-4 w-4 text-zinc-400 animate-spin flex-shrink-0" />
+        <Loader2 className="h-4 w-4 text-muted-foreground animate-spin flex-shrink-0" />
       );
     case "success":
       return (
@@ -44,7 +44,7 @@ function CollapsibleChevron() {
   return (
     <ChevronRight
       className={cn(
-        "h-4 w-4 text-zinc-500 transition-transform duration-200",
+        "h-4 w-4 text-muted-foreground transition-transform duration-200",
         isOpen && "rotate-90"
       )}
     />
@@ -72,25 +72,25 @@ function ToolCallCardInner({ toolCall }: ToolCallCardProps) {
   const hasArgs = Object.keys(args).length > 0;
 
   return (
-    <Collapsible className="rounded-lg border border-zinc-700/50 bg-zinc-800/30 overflow-hidden">
+    <Collapsible className="rounded-lg border border-border bg-muted/30 overflow-hidden">
       {/* Header - Always visible */}
       <CollapsibleTrigger
         className={cn(
           "flex items-center gap-2 px-3 py-2 w-full",
-          "hover:bg-zinc-700/30 transition-colors",
+          "hover:bg-muted/50 transition-colors",
           "text-left"
         )}
       >
         <CollapsibleChevron />
         <StatusIcon status={status} />
-        <span className="text-sm font-medium text-zinc-200 truncate flex-1">
+        <span className="text-sm font-medium text-foreground truncate flex-1">
           {name}
         </span>
         {status === "running" && (
-          <span className="text-xs text-zinc-500">Running...</span>
+          <span className="text-xs text-muted-foreground">Running...</span>
         )}
         {duration && (
-          <span className="text-xs text-zinc-500 flex items-center gap-1">
+          <span className="text-xs text-muted-foreground flex items-center gap-1">
             <Clock className="h-3 w-3" />
             {duration}
           </span>
@@ -99,14 +99,14 @@ function ToolCallCardInner({ toolCall }: ToolCallCardProps) {
 
       {/* Expandable Content */}
       <CollapsibleContent>
-        <div className="border-t border-zinc-700/50 px-3 py-2 space-y-3">
+        <div className="border-t border-border px-3 py-2 space-y-3">
           {/* Arguments */}
           {hasArgs && (
             <div>
-              <p className="text-xs font-medium text-zinc-500 mb-1.5">
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">
                 Arguments
               </p>
-              <pre className="text-xs font-mono text-zinc-300 bg-zinc-900/50 rounded-md p-2 overflow-x-auto">
+              <pre className="text-xs font-mono text-foreground bg-card/50 rounded-md p-2 overflow-x-auto">
                 <code>{formatArguments(args)}</code>
               </pre>
             </div>
@@ -115,10 +115,10 @@ function ToolCallCardInner({ toolCall }: ToolCallCardProps) {
           {/* Result - shown on success */}
           {status === "success" && result && (
             <div>
-              <p className="text-xs font-medium text-zinc-500 mb-1.5">
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">
                 Result
               </p>
-              <div className="text-sm text-zinc-300 bg-zinc-900/50 rounded-md p-2 overflow-x-auto">
+              <div className="text-sm text-foreground bg-card/50 rounded-md p-2 overflow-x-auto">
                 <MarkdownRenderer content={result} />
               </div>
             </div>

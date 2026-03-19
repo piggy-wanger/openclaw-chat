@@ -47,7 +47,7 @@ function ConnectionDot({ status }: { status: GatewayStatus }) {
   }
   return (
     <span
-      className="w-2 h-2 rounded-full bg-zinc-500"
+      className="w-2 h-2 rounded-full bg-muted-foreground"
       title="未连接"
     />
   );
@@ -73,7 +73,7 @@ export function ChatHeader({
   const currentModel = currentSession?.model || AVAILABLE_MODELS[0].value;
 
   return (
-    <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/50">
+    <header className="flex items-center justify-between px-4 py-3 border-b border-border bg-card/50">
       <div className="flex items-center gap-3">
         {/* Toggle Sidebar Button */}
         {isMobile && (
@@ -82,7 +82,7 @@ export function ChatHeader({
             size="icon"
             onClick={onToggleSidebar}
             aria-label="打开侧边栏"
-            className="text-zinc-400 hover:text-white"
+            className="text-muted-foreground hover:text-foreground"
           >
             {isSidebarOpen ? (
               <PanelLeftClose className="h-5 w-5" />
@@ -91,7 +91,7 @@ export function ChatHeader({
             )}
           </Button>
         )}
-        <h2 className="text-lg font-medium text-white truncate max-w-[300px]">
+        <h2 className="text-lg font-medium text-foreground truncate max-w-[300px]">
           {title}
         </h2>
         {/* 连接状态指示器 */}
@@ -101,7 +101,7 @@ export function ChatHeader({
       {/* Model Selector */}
       {currentSession && (
         <Select value={currentModel} onValueChange={onModelChange}>
-          <SelectTrigger className="w-[180px] bg-zinc-800 border-zinc-700 text-zinc-300">
+          <SelectTrigger className="w-[180px] bg-muted border-border text-foreground">
             <SelectValue placeholder="选择模型" />
           </SelectTrigger>
           <SelectContent>

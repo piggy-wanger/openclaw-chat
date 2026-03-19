@@ -318,10 +318,10 @@ export function ModelSettings({ client, gatewayStatus }: ModelSettingsProps) {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-lg font-semibold text-white mb-1">模型与 API</h2>
-          <p className="text-sm text-zinc-500">管理 Provider 和模型配置</p>
+          <h2 className="text-lg font-semibold text-foreground mb-1">模型与 API</h2>
+          <p className="text-sm text-muted-foreground">管理 Provider 和模型配置</p>
         </div>
-        <div className="flex items-center justify-center py-12 text-zinc-500">
+        <div className="flex items-center justify-center py-12 text-muted-foreground">
           <p>请先连接 Gateway</p>
         </div>
       </div>
@@ -333,10 +333,10 @@ export function ModelSettings({ client, gatewayStatus }: ModelSettingsProps) {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-lg font-semibold text-white mb-1">模型与 API</h2>
-          <p className="text-sm text-zinc-500">管理 Provider 和模型配置</p>
+          <h2 className="text-lg font-semibold text-foreground mb-1">模型与 API</h2>
+          <p className="text-sm text-muted-foreground">管理 Provider 和模型配置</p>
         </div>
-        <div className="flex items-center justify-center py-12 text-zinc-500">
+        <div className="flex items-center justify-center py-12 text-muted-foreground">
           <p>加载模型列表中...</p>
         </div>
       </div>
@@ -348,12 +348,12 @@ export function ModelSettings({ client, gatewayStatus }: ModelSettingsProps) {
       {/* 标题和添加按钮 */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-white mb-1">模型与 API</h2>
-          <p className="text-sm text-zinc-500">管理 Provider 和模型配置</p>
+          <h2 className="text-lg font-semibold text-foreground mb-1">模型与 API</h2>
+          <p className="text-sm text-muted-foreground">管理 Provider 和模型配置</p>
         </div>
         <button
           onClick={() => setShowAddDialog(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors"
         >
           <Plus className="w-4 h-4" />
           添加 Provider
@@ -362,7 +362,7 @@ export function ModelSettings({ client, gatewayStatus }: ModelSettingsProps) {
 
       {/* Provider 列表 */}
       {providerGroups.size === 0 ? (
-        <div className="flex items-center justify-center py-12 text-zinc-500">
+        <div className="flex items-center justify-center py-12 text-muted-foreground">
           <p>暂无配置的 Provider，点击上方按钮添加</p>
         </div>
       ) : (
@@ -372,29 +372,29 @@ export function ModelSettings({ client, gatewayStatus }: ModelSettingsProps) {
             return (
               <div
                 key={provider}
-                className="rounded-lg border border-zinc-800 overflow-hidden"
+                className="rounded-lg border border-border overflow-hidden"
               >
                 {/* Provider 标题（可点击展开/收起） */}
                 <button
                   onClick={() => toggleProvider(provider)}
-                  className="w-full px-4 py-3 bg-zinc-800/50 border-b border-zinc-800 flex items-center gap-3 hover:bg-zinc-800/70 transition-colors"
+                  className="w-full px-4 py-3 bg-muted/50 border-b border-border flex items-center gap-3 hover:bg-muted/70 transition-colors"
                 >
                   {isExpanded ? (
-                    <ChevronDown className="w-4 h-4 text-zinc-400" />
+                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
                   ) : (
-                    <ChevronRight className="w-4 h-4 text-zinc-400" />
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
                   )}
                   <div className="flex-1 text-left">
-                    <h3 className="text-sm font-medium text-zinc-200">
+                    <h3 className="text-sm font-medium text-foreground">
                       {getProviderDisplayName(provider)}
                     </h3>
-                    <p className="text-xs text-zinc-500">{providerModels.length} 个模型</p>
+                    <p className="text-xs text-muted-foreground">{providerModels.length} 个模型</p>
                   </div>
                 </button>
 
                 {/* 模型列表（展开时显示） */}
                 {isExpanded && (
-                  <div className="divide-y divide-zinc-800/50">
+                  <div className="divide-y divide-border/50">
                     {providerModels.map((model) => {
                       const modelId = model.key || model.id || "";
                       const displayName = model.name || modelId.split("/").pop() || modelId;
@@ -407,11 +407,11 @@ export function ModelSettings({ client, gatewayStatus }: ModelSettingsProps) {
                       return (
                         <div
                           key={modelId}
-                          className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-zinc-800/30 transition-colors"
+                          className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-muted/30 transition-colors"
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm text-zinc-200 truncate">
+                              <span className="text-sm text-foreground truncate">
                                 {displayName}
                               </span>
                               {/* Reasoning 标签 */}
@@ -429,7 +429,7 @@ export function ModelSettings({ client, gatewayStatus }: ModelSettingsProps) {
                             </div>
                             {/* Context window */}
                             {model.contextWindow && (
-                              <p className="text-xs text-zinc-500 mt-0.5">
+                              <p className="text-xs text-muted-foreground mt-0.5">
                                 {formatContextWindow(model.contextWindow)} context
                               </p>
                             )}
@@ -447,14 +447,14 @@ export function ModelSettings({ client, gatewayStatus }: ModelSettingsProps) {
 
       {/* 添加 Provider 对话框 */}
       {showAddDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl w-full max-w-md mx-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60">
+          <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-md mx-4">
             {/* 对话框标题 */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
-              <h3 className="text-lg font-semibold text-white">添加 Provider</h3>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <h3 className="text-lg font-semibold text-foreground">添加 Provider</h3>
               <button
                 onClick={closeDialog}
-                className="p-1 text-zinc-400 hover:text-zinc-200 transition-colors"
+                className="p-1 text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -464,13 +464,13 @@ export function ModelSettings({ client, gatewayStatus }: ModelSettingsProps) {
             <div className="p-4 space-y-4">
               {/* Provider 选择 */}
               <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                <label className="block text-sm font-medium text-foreground mb-1.5">
                   Provider
                 </label>
                 <select
                   value={addForm.providerId}
                   onChange={(e) => handleProviderSelect(e.target.value)}
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-zinc-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-md text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="">选择 Provider...</option>
                   {BUILT_IN_PROVIDERS.map((p) => (
@@ -484,22 +484,22 @@ export function ModelSettings({ client, gatewayStatus }: ModelSettingsProps) {
               {/* 模型选择 */}
               {addForm.providerId && selectedProviderModels.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
                     模型
                   </label>
-                  <div className="max-h-40 overflow-y-auto space-y-1 p-2 bg-zinc-800 border border-zinc-700 rounded-md">
+                  <div className="max-h-40 overflow-y-auto space-y-1 p-2 bg-muted border border-border rounded-md">
                     {selectedProviderModels.map((model) => (
                       <label
                         key={model.id}
-                        className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-700/50 rounded cursor-pointer"
+                        className="flex items-center gap-2 px-2 py-1.5 hover:bg-muted/50 rounded cursor-pointer"
                       >
                         <input
                           type="checkbox"
                           checked={addForm.selectedModels.includes(model.id)}
                           onChange={() => toggleModel(model.id)}
-                          className="w-4 h-4 rounded border-zinc-600 bg-zinc-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                          className="w-4 h-4 rounded border-border bg-muted text-primary focus:ring-primary focus:ring-offset-0"
                         />
-                        <span className="text-sm text-zinc-200">{model.name}</span>
+                        <span className="text-sm text-foreground">{model.name}</span>
                         {model.reasoning && (
                           <span className="px-1 py-0.5 text-[10px] rounded bg-purple-500/20 text-purple-400">
                             reasoning
@@ -513,7 +513,7 @@ export function ModelSettings({ client, gatewayStatus }: ModelSettingsProps) {
 
               {/* API Key */}
               <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                <label className="block text-sm font-medium text-foreground mb-1.5">
                   API Key
                 </label>
                 <input
@@ -521,13 +521,13 @@ export function ModelSettings({ client, gatewayStatus }: ModelSettingsProps) {
                   value={addForm.apiKey}
                   onChange={(e) => setAddForm((prev) => ({ ...prev, apiKey: e.target.value }))}
                   placeholder="sk-..."
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-zinc-200 text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-md text-foreground text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
 
               {/* Base URL */}
               <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                <label className="block text-sm font-medium text-foreground mb-1.5">
                   Base URL
                 </label>
                 <input
@@ -535,24 +535,24 @@ export function ModelSettings({ client, gatewayStatus }: ModelSettingsProps) {
                   value={addForm.baseUrl}
                   onChange={(e) => setAddForm((prev) => ({ ...prev, baseUrl: e.target.value }))}
                   placeholder="https://api.example.com"
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-zinc-200 text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-md text-foreground text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
             </div>
 
             {/* 对话框按钮 */}
-            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-zinc-800">
+            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border">
               <button
                 onClick={closeDialog}
                 disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
               >
                 取消
               </button>
               <button
                 onClick={handleAddProvider}
                 disabled={saving || !addForm.providerId || !addForm.apiKey}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 text-sm font-medium text-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? "保存中..." : "添加"}
               </button>
