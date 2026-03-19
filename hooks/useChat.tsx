@@ -70,6 +70,7 @@ export function ChatProvider({
   // 当前运行的 runId
   const currentRunIdRef = useRef<string | null>(null);
   const streamContentRef = useRef("");
+  const toolCallsRef = useRef<ToolCall[]>([]);
 
   // Session epoch 用于防止竞态条件
   const sessionEpochRef = useRef(0);
@@ -266,17 +267,19 @@ export function ChatProvider({
           break;
 
         case "final":
-          // 流完成 - 保存流式内容为正式消息
-          // 优先从 final message 提取完整 content blocks（含 tool_use/tool_result）
+          // 流完成 - 保存流式内容为正式消息，附带 tool 调用信息
           const rawMessage = event.message;
           let finalUsed = false;
+
+          // 收集当前 tool calls（用 ref 避免闭包问题）
+          const savedToolCalls = toolCallsRef.current;
+
           if (rawMessage) {
             console.log("[chat.final] raw message:", JSON.stringify(rawMessage).slice(0, 500));
             const rawContent = typeof rawMessage === "object" && rawMessage !== null && "content" in (rawMessage as Record<string, unknown>)
               ? (rawMessage as Record<string, unknown>).content
               : rawMessage;
 
-            // Gateway 可能将 content 数组序列化为 JSON 字符串
             let parsedFinalContent: unknown = rawContent;
             if (typeof rawContent === "string" && rawContent.trim().startsWith("[")) {
               try { parsedFinalContent = JSON.parse(rawContent); } catch { /* keep as string */ }
@@ -290,6 +293,7 @@ export function ChatProvider({
                 role: "assistant",
                 content: blocks,
                 createdAt: Date.now(),
+                toolCalls: savedToolCalls.length > 0 ? savedToolCalls : undefined,
               }]);
               finalUsed = true;
             } else {
@@ -301,13 +305,13 @@ export function ChatProvider({
                   role: "assistant",
                   content: textContent,
                   createdAt: Date.now(),
+                  toolCalls: savedToolCalls.length > 0 ? savedToolCalls : undefined,
                 }]);
                 finalUsed = true;
               }
             }
           }
 
-          // fallback：用流式累积的纯文本
           if (!finalUsed && streamContentRef.current?.trim()) {
             setMessagesWithCache((prev) => [...prev, {
               id: `msg-final-${nanoid()}`,
@@ -315,6 +319,7 @@ export function ChatProvider({
               role: "assistant",
               content: streamContentRef.current,
               createdAt: Date.now(),
+              toolCalls: savedToolCalls.length > 0 ? savedToolCalls : undefined,
             }]);
           }
           streamContentRef.current = "";
@@ -379,7 +384,7 @@ export function ChatProvider({
 
           if (existing) {
             // 更新现有工具调用
-            return prev.map((tc) => {
+            const updated = prev.map((tc) => {
               if (tc.id !== toolCallId) return tc;
 
               const status: ToolCallStatus = isError
@@ -402,6 +407,8 @@ export function ChatProvider({
                   phase === "result" ? Date.now() : tc.completedAt,
               };
             });
+            toolCallsRef.current = updated;
+            return updated;
           } else {
             // 创建新的工具调用
             const status: ToolCallStatus = isError
@@ -426,7 +433,9 @@ export function ChatProvider({
               completedAt: phase === "result" ? Date.now() : undefined,
             };
 
-            return [...prev, newToolCall];
+            const next = [...prev, newToolCall];
+            toolCallsRef.current = next;
+            return next;
           }
         });
       }

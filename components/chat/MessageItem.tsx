@@ -19,8 +19,10 @@ type MessageItemProps = {
   toolCalls?: ToolCall[];
 };
 
-function MessageItemInner({ message, toolCalls }: MessageItemProps) {
+function MessageItemInner({ message, toolCalls: realtimeToolCalls }: MessageItemProps) {
   const { role, content, createdAt } = message;
+  // 合并实时 tool calls 和消息保存的 tool calls
+  const allToolCalls = realtimeToolCalls || ("toolCalls" in message ? (message as Record<string, unknown>).toolCalls as ToolCall[] : undefined);
 
   // 格式化时间（HH:mm）
   const timestamp = format(new Date(createdAt), "HH:mm");
@@ -73,7 +75,7 @@ function MessageItemInner({ message, toolCalls }: MessageItemProps) {
   }
 
   // assistant 消息：左对齐，深色背景
-  const hasToolCalls = toolCalls && toolCalls.length > 0;
+  const hasToolCalls = allToolCalls && allToolCalls.length > 0;
   const hasTextContent = textContent.trim().length > 0;
 
   return (
@@ -98,7 +100,7 @@ function MessageItemInner({ message, toolCalls }: MessageItemProps) {
         {/* Real-time tool calls (from agent stream) */}
         {hasToolCalls && (
           <div className="mt-2">
-            <ToolCallList toolCalls={toolCalls} />
+            <ToolCallList toolCalls={allToolCalls} />
           </div>
         )}
 
@@ -106,7 +108,7 @@ function MessageItemInner({ message, toolCalls }: MessageItemProps) {
         {(hasTextContent || hasToolCalls) && (
           <div className="flex items-center justify-between mt-1">
             <p className="text-xs text-muted-foreground">{timestamp}</p>
-            {hasContentToolBlocks && <ToolToggleButton toolBlocks={toolBlocks} />}
+            {(hasContentToolBlocks || hasToolCalls) && <ToolToggleButton toolBlocks={toolBlocks} toolCalls={allToolCalls} />}
           </div>
         )}
       </div>
@@ -115,8 +117,11 @@ function MessageItemInner({ message, toolCalls }: MessageItemProps) {
 }
 
 // 扳手按钮组件 - 点击展开/收起 tool 卡片列表
-function ToolToggleButton({ toolBlocks }: { toolBlocks: ReturnType<typeof parseToolBlocks> }) {
+function ToolToggleButton({ toolBlocks, toolCalls }: { toolBlocks: ReturnType<typeof parseToolBlocks>; toolCalls?: ToolCall[] }) {
   const [open, setOpen] = useState(false);
+  const hasTools = (toolBlocks && toolBlocks.length > 0) || (toolCalls && toolCalls.length > 0);
+
+  if (!hasTools) return null;
 
   return (
     <div className="relative">
@@ -141,6 +146,9 @@ function ToolToggleButton({ toolBlocks }: { toolBlocks: ReturnType<typeof parseT
             {toolBlocks.map((toolBlock) => (
               <ContentBlockCard key={toolBlock.id} toolBlock={toolBlock} />
             ))}
+            {toolCalls && toolCalls.length > 0 && (
+              <ToolCallList toolCalls={toolCalls} />
+            )}
           </div>
         </>
       )}
