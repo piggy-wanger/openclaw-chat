@@ -262,20 +262,35 @@ export function ChatProvider({
           break;
 
         case "final":
-          // 流完成 - 先将流式内容保存为消息
-          const savedContent = streamContentRef.current;
-          if (savedContent?.trim()) {
+          // 流完成 - 如果 streamContent 为空，从 final 的 message 中提取内容
+          const rawMessage = event.message;
+          const finalContent = rawMessage
+            ? extractContent(typeof rawMessage === "object" && rawMessage !== null && "content" in (rawMessage as Record<string, unknown>) ? (rawMessage as Record<string, unknown>).content : rawMessage)
+            : "";
+          if (!streamContentRef.current?.trim() && finalContent) {
             setMessages((prev) => [
               ...prev,
               {
                 id: `msg-final-${nanoid()}`,
                 sessionId: sessionId || "",
                 role: "assistant",
-                content: savedContent,
+                content: finalContent,
+                createdAt: Date.now(),
+              },
+            ]);
+          } else if (streamContentRef.current?.trim()) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `msg-final-${nanoid()}`,
+                sessionId: sessionId || "",
+                role: "assistant",
+                content: streamContentRef.current,
                 createdAt: Date.now(),
               },
             ]);
           }
+          streamContentRef.current = "";
           setStreamContent("");
           setIsStreaming(false);
           currentRunIdRef.current = null;
@@ -304,7 +319,7 @@ export function ChatProvider({
     return () => unsubscribe();
   }, [sessionId, client, fetchMessages, onSessionKeyUpdate]);
 
-  // 处理 agent 事件（工具调用）
+  // 处理 agent 事件（工具调用 + 流式助手回复）
   useEffect(() => {
     const handleAgent = (event: AgentEvent) => {
       // 只处理当前 session 的事件
@@ -313,6 +328,19 @@ export function ChatProvider({
       // 只处理当前 run 的事件
       if (currentRunIdRef.current && event.runId !== currentRunIdRef.current)
         return;
+
+      // 处理流式助手回复
+      if (event.stream === "assistant" && event.data) {
+        const delta = (event.data as Record<string, unknown>).delta;
+        if (typeof delta === "string" && delta) {
+          setIsStreaming(true);
+          setStreamContent((prev) => {
+            streamContentRef.current = prev + delta;
+            return prev + delta;
+          });
+        }
+        return;
+      }
 
       if (event.stream === "tool" && event.data) {
         const { toolCallId, name, args, phase, result, isError } = event.data;
