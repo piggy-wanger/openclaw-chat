@@ -267,42 +267,55 @@ export function ChatProvider({
 
         case "final":
           // 流完成 - 保存流式内容为正式消息
-          if (streamContentRef.current?.trim()) {
-            const assistantMsg: Message = {
+          // 优先从 final message 提取完整 content blocks（含 tool_use/tool_result）
+          const rawMessage = event.message;
+          let finalUsed = false;
+          if (rawMessage) {
+            console.log("[chat.final] raw message:", JSON.stringify(rawMessage).slice(0, 500));
+            const rawContent = typeof rawMessage === "object" && rawMessage !== null && "content" in (rawMessage as Record<string, unknown>)
+              ? (rawMessage as Record<string, unknown>).content
+              : rawMessage;
+
+            // Gateway 可能将 content 数组序列化为 JSON 字符串
+            let parsedFinalContent: unknown = rawContent;
+            if (typeof rawContent === "string" && rawContent.trim().startsWith("[")) {
+              try { parsedFinalContent = JSON.parse(rawContent); } catch { /* keep as string */ }
+            }
+
+            const blocks = parseContentBlocks(parsedFinalContent);
+            if (blocks) {
+              setMessagesWithCache((prev) => [...prev, {
+                id: `msg-final-${nanoid()}`,
+                sessionId: sessionId || "",
+                role: "assistant",
+                content: blocks,
+                createdAt: Date.now(),
+              }]);
+              finalUsed = true;
+            } else {
+              const textContent = extractContent(parsedFinalContent);
+              if (textContent) {
+                setMessagesWithCache((prev) => [...prev, {
+                  id: `msg-final-${nanoid()}`,
+                  sessionId: sessionId || "",
+                  role: "assistant",
+                  content: textContent,
+                  createdAt: Date.now(),
+                }]);
+                finalUsed = true;
+              }
+            }
+          }
+
+          // fallback：用流式累积的纯文本
+          if (!finalUsed && streamContentRef.current?.trim()) {
+            setMessagesWithCache((prev) => [...prev, {
               id: `msg-final-${nanoid()}`,
               sessionId: sessionId || "",
               role: "assistant",
               content: streamContentRef.current,
               createdAt: Date.now(),
-            };
-            setMessagesWithCache((prev) => [...prev, assistantMsg]);
-          } else {
-            // 没有流式内容，从 final message 提取
-            const rawMessage = event.message;
-            if (rawMessage) {
-              console.log("[chat.final] raw message:", JSON.stringify(rawMessage).slice(0, 500));
-              // Extract raw content from message
-              const rawContent = typeof rawMessage === "object" && rawMessage !== null && "content" in (rawMessage as Record<string, unknown>)
-                ? (rawMessage as Record<string, unknown>).content
-                : rawMessage;
-
-              // Check if content is in block array format
-              const blocks = parseContentBlocks(rawContent);
-              const finalContent: string | ContentBlock[] = blocks ?? extractContent(rawContent);
-
-              if (finalContent) {
-                setMessagesWithCache((prev) => [
-                  ...prev,
-                  {
-                    id: `msg-final-${nanoid()}`,
-                    sessionId: sessionId || "",
-                    role: "assistant",
-                    content: finalContent,
-                    createdAt: Date.now(),
-                  },
-                ]);
-              }
-            }
+            }]);
           }
           streamContentRef.current = "";
           setStreamContent("");
