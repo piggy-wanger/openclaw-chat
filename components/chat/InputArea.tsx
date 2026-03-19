@@ -84,7 +84,7 @@ function InputAreaInner({ onSend, onUpload, isStreaming, onAbort, disabled }: In
       {/* 渐变遮罩，让输入框融入背景 */}
       <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-background to-transparent pointer-events-none" />
 
-      <div className="relative w-[90.9%] mx-auto">
+      <div className="relative w-[95%] mx-auto">
         {/* 附件预览 */}
         {attachedFiles.length > 0 && (
           <div className="flex gap-2 mb-2 flex-wrap">
