@@ -131,8 +131,8 @@ export function ChatProvider({
         }
       }
 
-      // 如果历史为空且要求保留（如 final 后刷新），不清空现有消息
-      if (formattedMessages.length > 0 || !opts?.preserveEmpty) {
+      // 如果历史为空，不清空现有消息（避免覆盖本地状态）
+      if (formattedMessages.length > 0) {
         setMessages(formattedMessages);
       }
       // After first successful load, mark that we've loaded once
@@ -262,40 +262,40 @@ export function ChatProvider({
           break;
 
         case "final":
-          // 流完成 - 如果 streamContent 为空，从 final 的 message 中提取内容
-          const rawMessage = event.message;
-          const finalContent = rawMessage
-            ? extractContent(typeof rawMessage === "object" && rawMessage !== null && "content" in (rawMessage as Record<string, unknown>) ? (rawMessage as Record<string, unknown>).content : rawMessage)
-            : "";
-          if (!streamContentRef.current?.trim() && finalContent) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `msg-final-${nanoid()}`,
-                sessionId: sessionId || "",
-                role: "assistant",
-                content: finalContent,
-                createdAt: Date.now(),
-              },
-            ]);
-          } else if (streamContentRef.current?.trim()) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `msg-final-${nanoid()}`,
-                sessionId: sessionId || "",
-                role: "assistant",
-                content: streamContentRef.current,
-                createdAt: Date.now(),
-              },
-            ]);
+          // 流完成 - 保存流式内容为正式消息
+          if (streamContentRef.current?.trim()) {
+            const assistantMsg: Message = {
+              id: `msg-final-${nanoid()}`,
+              sessionId: sessionId || "",
+              role: "assistant",
+              content: streamContentRef.current,
+              createdAt: Date.now(),
+            };
+            setMessages((prev) => [...prev, assistantMsg]);
+          } else {
+            // 没有流式内容，从 final message 提取
+            const rawMessage = event.message;
+            const finalContent = rawMessage
+              ? extractContent(typeof rawMessage === "object" && rawMessage !== null && "content" in (rawMessage as Record<string, unknown>) ? (rawMessage as Record<string, unknown>).content : rawMessage)
+              : "";
+            if (finalContent) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `msg-final-${nanoid()}`,
+                  sessionId: sessionId || "",
+                  role: "assistant",
+                  content: finalContent,
+                  createdAt: Date.now(),
+                },
+              ]);
+            }
           }
           streamContentRef.current = "";
           setStreamContent("");
           setIsStreaming(false);
           currentRunIdRef.current = null;
-          // 尝试从历史刷新（保留现有消息，如果历史为空不清空）
-          fetchMessages({ preserveEmpty: true });
+          // 不再调用 fetchMessages，因为 Gateway 的 chat.history 返回 0
           break;
 
         case "aborted":
