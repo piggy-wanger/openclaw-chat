@@ -181,6 +181,7 @@ export function ChatProvider({
         const result = await client.chatSend({
           sessionKey: sessionId,
           message: content.trim(),
+          idempotencyKey: nanoid(),
         });
 
         currentRunIdRef.current = result.runId;
