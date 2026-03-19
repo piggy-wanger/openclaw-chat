@@ -345,7 +345,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
         </div>
         <button
           onClick={openAddDialog}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors"
         >
           <Plus className="w-4 h-4" />
           添加智能体

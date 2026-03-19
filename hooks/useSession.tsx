@@ -10,6 +10,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { nanoid } from "nanoid";
 import { useGateway } from "./useGateway";
 import type { SessionEntry } from "@/lib/gateway-types";
 import type { Session } from "@/lib/types";
@@ -23,6 +24,16 @@ type SessionContextType = {
   error: string | null;
   fetchSessions: () => Promise<void>;
   createSession: () => Promise<Session | null>;
+  createSessionWithOptions: (options: {
+    sessionName: string;
+    agentId: string;
+    model: string;
+  }) => Promise<Session | null>;
+  createGroupSession: (options: {
+    groupName: string;
+    agentIds: string[];
+    model?: string;
+  }) => Promise<Session | null>;
   updateSession: (
     id: string,
     updates: { title?: string; model?: string }
@@ -98,9 +109,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // 创建新会话 - Gateway 模式下不预先创建，返回一个临时 session
   const createSession = useCallback(async () => {
     // 在 Gateway 模式下，会话在首条消息发送时自动创建
-    // 这里创建一个临时的 session 占位符
+    // 这里创建一个临时的 session 占位符，使用 nanoid 避免 ID 冲突
     const tempSession: Session = {
-      id: `temp-${Date.now()}`,
+      id: `temp-${Date.now()}-${nanoid(6)}`,
       title: "New Chat",
       type: "direct",
       model: "unknown",
@@ -114,6 +125,79 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     return tempSession;
   }, []);
+
+  // 创建带有自定义选项的新会话
+  const createSessionWithOptions = useCallback(
+    async (options: {
+      sessionName: string;
+      agentId: string;
+      model: string;
+    }) => {
+      const { sessionName, agentId, model } = options;
+
+      // 构建唯一的 session ID: agent:<agentId>:<sessionName>:<nanoid>
+      // sessionKey for Gateway is agent:<agentId>:<sessionName>, but local ID is unique
+      const uniqueId = `agent:${agentId}:${sessionName}:${nanoid(6)}`;
+
+      // 创建一个临时 session（真实的 sessionKey 在首条消息发送后生效）
+      const tempSession: Session = {
+        id: uniqueId,
+        title: sessionName,
+        type: "direct",
+        model: model,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      // 添加到列表并设为当前会话
+      setSessions((prev) => [tempSession, ...prev]);
+      setCurrentSessionId(tempSession.id);
+
+      return tempSession;
+    },
+    []
+  );
+
+  // 创建群组会话 - 需要先在 Gateway 创建真实会话
+  const createGroupSession = useCallback(
+    async (options: {
+      groupName: string;
+      agentIds: string[];
+      model?: string;
+    }) => {
+      const { groupName, agentIds, model } = options;
+
+      if (!isConnected || agentIds.length === 0) {
+        return null;
+      }
+
+      try {
+        // 使用第一个 agent 作为主 agent，并添加 nanoid 避免冲突
+        const primaryAgentId = agentIds[0];
+        const sessionKey = `agent:${primaryAgentId}:${groupName}:${nanoid(6)}`;
+
+        // 创建群组 session（真实会话在用户发送首条消息时由 Gateway 创建）
+        const groupSession: Session = {
+          id: sessionKey,
+          title: groupName,
+          type: "group",
+          model: model || "unknown",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+
+        // 添加到列表并设为当前会话
+        setSessions((prev) => [groupSession, ...prev]);
+        setCurrentSessionId(groupSession.id);
+
+        return groupSession;
+      } catch (err) {
+        console.error("Error creating group session:", err);
+        return null;
+      }
+    },
+    [client, isConnected]
+  );
 
   // 更新会话
   const updateSession = useCallback(
@@ -243,6 +327,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         error,
         fetchSessions,
         createSession,
+        createSessionWithOptions,
+        createGroupSession,
         updateSession,
         updateTempSessionId,
         deleteSession,

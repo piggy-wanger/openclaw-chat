@@ -1,12 +1,14 @@
 "use client";
 
-import { useRef, useCallback, forwardRef, useImperativeHandle } from "react";
+import { useRef, useCallback, forwardRef, useImperativeHandle, useState } from "react";
 import { Plus, Settings, MessageSquare, Users } from "lucide-react";
 import Link from "next/link";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SessionList } from "./SessionList";
+import { NewSessionDialog } from "@/components/dialogs/NewSessionDialog";
+import { CreateGroupDialog } from "@/components/dialogs/CreateGroupDialog";
 import type { Session } from "@/lib/types";
+import type { GatewayClient } from "@/lib/gateway-client";
 
 export type SidebarRef = {
   focusSearch: () => void;
@@ -16,10 +18,21 @@ interface SidebarProps {
   sessions: Session[];
   currentSessionId: string | null;
   loading?: boolean;
+  client: GatewayClient | null;
+  isConnected: boolean;
   onSelectSession: (id: string) => void;
   onRenameSession: (id: string, title: string) => void;
   onDeleteSession: (id: string) => void;
-  onCreateSession: () => void;
+  onCreateSessionWithOptions: (options: {
+    sessionName: string;
+    agentId: string;
+    model: string;
+  }) => void;
+  onCreateGroup: (options: {
+    groupName: string;
+    agentIds: string[];
+    model?: string;
+  }) => void;
 }
 
 export const Sidebar = forwardRef<SidebarRef, SidebarProps>(
@@ -28,14 +41,19 @@ export const Sidebar = forwardRef<SidebarRef, SidebarProps>(
       sessions,
       currentSessionId,
       loading,
+      client,
+      isConnected,
       onSelectSession,
       onRenameSession,
       onDeleteSession,
-      onCreateSession,
+      onCreateSessionWithOptions,
+      onCreateGroup,
     },
     ref
   ) {
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const [showNewSessionDialog, setShowNewSessionDialog] = useState(false);
+    const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
 
     const focusSearch = useCallback(() => {
       searchInputRef.current?.focus();
@@ -45,12 +63,23 @@ export const Sidebar = forwardRef<SidebarRef, SidebarProps>(
       focusSearch,
     }));
 
-    // Placeholder for group creation
-    const handleCreateGroup = useCallback(() => {
-      toast.info("群组创建功能即将推出", {
-        description: "敬请期待！",
-      });
-    }, []);
+    // Handle new session creation from dialog
+    const handleCreateSessionWithOptions = useCallback(
+      (options: { sessionName: string; agentId: string; model: string }) => {
+        onCreateSessionWithOptions(options);
+        setShowNewSessionDialog(false);
+      },
+      [onCreateSessionWithOptions]
+    );
+
+    // Handle group creation from dialog
+    const handleCreateGroup = useCallback(
+      (options: { groupName: string; agentIds: string[]; model?: string }) => {
+        onCreateGroup(options);
+        setShowCreateGroupDialog(false);
+      },
+      [onCreateGroup]
+    );
 
     return (
       <aside className="w-[280px] h-full flex flex-col bg-card border-r border-border">
@@ -63,7 +92,7 @@ export const Sidebar = forwardRef<SidebarRef, SidebarProps>(
         {/* New Session Button */}
         <div className="px-3 py-3 space-y-2">
           <Button
-            onClick={onCreateSession}
+            onClick={() => setShowNewSessionDialog(true)}
             className="w-full justify-start gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />
@@ -71,7 +100,7 @@ export const Sidebar = forwardRef<SidebarRef, SidebarProps>(
           </Button>
           <Button
             variant="outline"
-            onClick={handleCreateGroup}
+            onClick={() => setShowCreateGroupDialog(true)}
             className="w-full justify-start gap-2 bg-muted/50 text-foreground hover:bg-muted border-border"
           >
             <Users className="h-4 w-4" />
@@ -102,6 +131,24 @@ export const Sidebar = forwardRef<SidebarRef, SidebarProps>(
             </Button>
           </Link>
         </div>
+
+        {/* New Session Dialog */}
+        <NewSessionDialog
+          open={showNewSessionDialog}
+          onOpenChange={setShowNewSessionDialog}
+          client={client}
+          isConnected={isConnected}
+          onCreateSession={handleCreateSessionWithOptions}
+        />
+
+        {/* Create Group Dialog */}
+        <CreateGroupDialog
+          open={showCreateGroupDialog}
+          onOpenChange={setShowCreateGroupDialog}
+          client={client}
+          isConnected={isConnected}
+          onCreateGroup={handleCreateGroup}
+        />
       </aside>
     );
   }
