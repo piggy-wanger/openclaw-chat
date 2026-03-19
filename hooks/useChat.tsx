@@ -340,6 +340,19 @@ export function ChatProvider({
       if (currentRunIdRef.current && event.runId !== currentRunIdRef.current)
         return;
 
+      // agent.assistant 事件携带增量 delta（Gateway 不发 chat.delta）
+      if (event.stream === "assistant" && event.data) {
+        const delta = (event.data as Record<string, unknown>).delta;
+        if (typeof delta === "string" && delta.trim() && !delta.startsWith("NO_REPLY")) {
+          setIsStreaming(true);
+          setStreamContent((prev) => {
+            streamContentRef.current = prev + delta;
+            return prev + delta;
+          });
+        }
+        return;
+      }
+
       if (event.stream === "tool" && event.data) {
         const { toolCallId, name, args, phase, result, isError } = event.data;
 
