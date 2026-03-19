@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/Providers";
 import "./globals.css";
 
@@ -26,13 +25,27 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const mode = localStorage.getItem("openclaw-chat-theme-mode") || "dark";
+                const resolved = mode === "system"
+                  ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+                  : mode;
+                document.documentElement.classList.add(resolved);
+              } catch(e) {}
+            `,
+          }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
         <TooltipProvider>
           <Providers>{children}</Providers>
-          <Toaster />
         </TooltipProvider>
       </body>
     </html>
