@@ -5,11 +5,12 @@ import { useGateway, type GatewayStatus } from "@/hooks/useGateway";
 import { useSession } from "@/hooks/useSession";
 import { ConnectionSettings } from "./ConnectionSettings";
 import { ModelSettings } from "./ModelSettings";
+import { AgentSettings } from "./AgentSettings";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { SessionSettings } from "./SessionSettings";
 import { AboutSettings } from "./AboutSettings";
 
-export type SettingsCategory = "connection" | "model" | "appearance" | "session" | "about";
+export type SettingsCategory = "connection" | "model" | "agent" | "appearance" | "session" | "about";
 
 type SettingsFormInnerProps = {
   activeCategory: SettingsCategory;
@@ -61,6 +62,13 @@ function SettingsFormInner({
       case "model":
         return (
           <ModelSettings
+            client={client}
+            gatewayStatus={status}
+          />
+        );
+      case "agent":
+        return (
+          <AgentSettings
             client={client}
             gatewayStatus={status}
           />

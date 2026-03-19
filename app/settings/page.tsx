@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   Wifi,
   Brain,
+  Bot,
   Palette,
   MessageSquare,
   Info,
@@ -18,6 +19,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS: { key: SettingsCategory; label: string; icon: typeof Wifi }[] = [
   { key: "connection", label: "连接", icon: Wifi },
   { key: "model", label: "模型与 API", icon: Brain },
+  { key: "agent", label: "智能体", icon: Bot },
   { key: "appearance", label: "外观", icon: Palette },
   { key: "session", label: "会话", icon: MessageSquare },
   { key: "about", label: "关于", icon: Info },

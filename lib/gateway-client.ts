@@ -525,6 +525,13 @@ export class GatewayClient {
     return this.request("config.set", { baseHash, patch });
   }
 
+  /**
+   * 应用配置（重启 gateway）
+   */
+  configApply(): Promise<void> {
+    return this.request("config.apply", {});
+  }
+
   // ==================== 事件订阅 ====================
 
   /**
