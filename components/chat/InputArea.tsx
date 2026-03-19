@@ -80,11 +80,11 @@ function InputAreaInner({ onSend, onUpload, isStreaming, onAbort, disabled }: In
   const canSend = (input.trim().length > 0 || attachedFiles.length > 0) && !isStreaming && !disabled;
 
   return (
-    <div className="sticky bottom-0 z-20 px-4 pb-5 pt-2">
+    <div className="sticky bottom-0 z-20 px-4 pb-[30px] pt-2">
       {/* 渐变遮罩，让输入框融入背景 */}
       <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-background to-transparent pointer-events-none" />
 
-      <div className="relative w-4/5 mx-auto">
+      <div className="relative w-[88.8%] mx-auto">
         {/* 附件预览 */}
         {attachedFiles.length > 0 && (
           <div className="flex gap-2 mb-2 flex-wrap">
