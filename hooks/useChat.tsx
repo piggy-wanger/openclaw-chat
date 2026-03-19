@@ -34,9 +34,11 @@ const ChatContext = createContext<ChatContextType | null>(null);
 export function ChatProvider({
   children,
   sessionId,
+  onSessionKeyUpdate,
 }: {
   children: ReactNode;
   sessionId: string | null;
+  onSessionKeyUpdate?: (tempId: string, realSessionKey: string) => void;
 }) {
   const { client, isConnected } = useGateway();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -186,8 +188,21 @@ export function ChatProvider({
   // 处理 chat 事件
   useEffect(() => {
     const handleChat = (event: ChatEvent) => {
-      // 只处理当前 session 的事件
-      if (event.sessionKey !== sessionId) return;
+      // 检查是否是临时会话
+      const isTempSession = sessionId?.startsWith("temp-");
+
+      // 对于临时会话，接收第一个带有真实 sessionKey 的事件
+      if (isTempSession && sessionId && !event.sessionKey.startsWith("temp-")) {
+        // 更新临时会话 ID 为真实 sessionKey
+        onSessionKeyUpdate?.(sessionId, event.sessionKey);
+      }
+
+      // 只处理当前 session 的事件（包括临时会话的情况）
+      const isCurrentSession = isTempSession
+        ? !event.sessionKey.startsWith("temp-") || event.sessionKey === sessionId
+        : event.sessionKey === sessionId;
+
+      if (!isCurrentSession) return;
 
       switch (event.state) {
         case "delta":
@@ -229,7 +244,7 @@ export function ChatProvider({
 
     const unsubscribe = client.on("chat", handleChat);
     return () => unsubscribe();
-  }, [sessionId, client, fetchMessages]);
+  }, [sessionId, client, fetchMessages, onSessionKeyUpdate]);
 
   // 处理 agent 事件（工具调用）
   useEffect(() => {

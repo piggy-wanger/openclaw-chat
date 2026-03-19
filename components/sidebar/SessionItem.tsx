@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Session } from "@/lib/types";
+import { extractSessionDisplayName } from "@/hooks/useSession";
 
 interface SessionItemProps {
   session: Session;
@@ -87,7 +88,9 @@ export function SessionItem({
         }}
       >
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium truncate">{session.title}</div>
+          <div className="text-sm font-medium truncate">
+            {session.id.startsWith("temp-") ? session.title : extractSessionDisplayName(session.id)}
+          </div>
           <div className="text-xs text-muted-foreground">{relativeTime}</div>
         </div>
         <div

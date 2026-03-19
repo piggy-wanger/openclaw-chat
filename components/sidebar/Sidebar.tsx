@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef, useCallback, forwardRef, useImperativeHandle } from "react";
-import { Plus, Settings, MessageSquare } from "lucide-react";
+import { Plus, Settings, MessageSquare, Users } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SessionList } from "./SessionList";
 import type { Session } from "@/lib/types";
@@ -44,6 +45,13 @@ export const Sidebar = forwardRef<SidebarRef, SidebarProps>(
       focusSearch,
     }));
 
+    // Placeholder for group creation
+    const handleCreateGroup = useCallback(() => {
+      toast.info("群组创建功能即将推出", {
+        description: "敬请期待！",
+      });
+    }, []);
+
     return (
       <aside className="w-[280px] h-full flex flex-col bg-card border-r border-border">
         {/* Header */}
@@ -53,13 +61,21 @@ export const Sidebar = forwardRef<SidebarRef, SidebarProps>(
         </div>
 
         {/* New Session Button */}
-        <div className="px-3 py-3">
+        <div className="px-3 py-3 space-y-2">
           <Button
             onClick={onCreateSession}
-            className="w-full justify-start gap-2 bg-blue-600 hover:bg-blue-700"
+            className="w-full justify-start gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />
             新建会话
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleCreateGroup}
+            className="w-full justify-start gap-2 bg-muted/50 text-foreground hover:bg-muted border-border"
+          >
+            <Users className="h-4 w-4" />
+            新建群组
           </Button>
         </div>
 
