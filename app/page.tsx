@@ -366,6 +366,7 @@ function ChatArea({
                     isStreaming={isStreaming}
                     streamContent={streamContent}
                     loading={messageLoading}
+                    isInitialLoad={isInitialLoad}
                     toolCalls={toolCalls}
                   />
                 </>
@@ -377,6 +378,7 @@ function ChatArea({
                   isStreaming={isStreaming}
                   streamContent={streamContent}
                   loading={messageLoading}
+                  isInitialLoad={isInitialLoad}
                   toolCalls={toolCalls}
                 />
               )}

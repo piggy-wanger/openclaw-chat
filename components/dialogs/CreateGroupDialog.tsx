@@ -14,15 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { GatewayClient } from "@/lib/gateway-client";
-import type { GatewayModel } from "@/lib/gateway-types";
 
 // Agent 类型定义
 type AgentIdentity = {
@@ -47,7 +39,6 @@ type CreateGroupDialogProps = {
   onCreateGroup: (options: {
     groupName: string;
     agentIds: string[];
-    model?: string;
   }) => void;
 };
 
@@ -60,11 +51,8 @@ export function CreateGroupDialog({
 }: CreateGroupDialogProps) {
   const [groupName, setGroupName] = useState("");
   const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>("");
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [models, setModels] = useState<GatewayModel[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
-  const [loadingModels, setLoadingModels] = useState(false);
 
   // Load agents from config
   useEffect(() => {
@@ -97,34 +85,6 @@ export function CreateGroupDialog({
     };
   }, [open, isConnected, client]);
 
-  // Load models from Gateway
-  useEffect(() => {
-    if (!open || !isConnected || !client) return;
-
-    let cancelled = false;
-    const loadModels = async () => {
-      if (cancelled) return;
-      try {
-        const result = await client.modelsList();
-        if (cancelled) return;
-        setModels(result);
-        if (result.length > 0) {
-          setSelectedModel(result[0].id || result[0].key || "");
-        }
-      } catch (err) {
-        if (cancelled) return;
-        console.error("Failed to load models:", err);
-      } finally {
-        if (!cancelled) setLoadingModels(false);
-      }
-    };
-    setLoadingModels(true);
-    loadModels();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, isConnected, client]);
-
   // Toggle agent selection
   const toggleAgent = (agentId: string) => {
     setSelectedAgentIds((prev) =>
@@ -132,16 +92,6 @@ export function CreateGroupDialog({
         ? prev.filter((id) => id !== agentId)
         : [...prev, agentId]
     );
-  };
-
-  // Get model display name
-  const getModelDisplayName = (model: GatewayModel): string => {
-    return model.name || model.id || model.key || "Unknown Model";
-  };
-
-  // Get model value
-  const getModelValue = (model: GatewayModel): string => {
-    return model.id || model.key || "";
   };
 
   // Handle form submission
@@ -153,7 +103,6 @@ export function CreateGroupDialog({
     onCreateGroup({
       groupName: groupName.trim(),
       agentIds: selectedAgentIds,
-      model: selectedModel || undefined,
     });
 
     // Reset form
@@ -266,39 +215,6 @@ export function CreateGroupDialog({
                   );
                 })}
               </div>
-            )}
-          </div>
-
-          {/* Model Selector (Optional) */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">
-              模型 <span className="text-muted-foreground">(可选)</span>
-            </label>
-            {loadingModels ? (
-              <div className="flex items-center gap-2 px-3 py-2 text-muted-foreground text-sm">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                加载中...
-              </div>
-            ) : (
-              <Select
-                value={selectedModel}
-                onValueChange={(value) => setSelectedModel(value || "")}
-              >
-                <SelectTrigger className="bg-muted border-border text-foreground">
-                  <SelectValue placeholder="选择模型..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">使用默认模型</SelectItem>
-                  {models.map((model) => (
-                    <SelectItem
-                      key={getModelValue(model)}
-                      value={getModelValue(model)}
-                    >
-                      {getModelDisplayName(model)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             )}
           </div>
         </div>

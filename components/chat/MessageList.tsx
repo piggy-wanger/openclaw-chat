@@ -13,6 +13,7 @@ type MessageListProps = {
   isStreaming: boolean;
   streamContent: string;
   loading?: boolean;
+  isInitialLoad?: boolean;
   toolCalls?: ToolCall[];
 };
 
@@ -49,6 +50,7 @@ function MessageListInner({
   isStreaming,
   streamContent,
   loading,
+  isInitialLoad = true,
   toolCalls = [],
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -93,8 +95,8 @@ function MessageListInner({
     }
   }, [messages, streamContent, isStreaming, scrollToBottom]);
 
-  // 显示加载骨架屏
-  if (loading) {
+  // 显示加载骨架屏（仅在首次加载时，避免会话切换时闪烁）
+  if (loading && isInitialLoad) {
     return <MessageListSkeleton />;
   }
 

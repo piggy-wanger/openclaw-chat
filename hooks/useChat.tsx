@@ -14,6 +14,18 @@ import type { ChatEvent, AgentEvent } from "@/lib/gateway-types";
 import type { Message, ToolCall, ToolCallStatus } from "@/lib/types";
 import { nanoid } from "nanoid";
 
+// Extract text from content (handles both string and array formats)
+function extractContent(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((block) => block?.type === "text" && typeof block?.text === "string")
+      .map((block) => block.text)
+      .join("\n");
+  }
+  return JSON.stringify(content);
+}
+
 // Context 类型
 type ChatContextType = {
   messages: Message[];
@@ -103,17 +115,16 @@ export function ChatProvider({
       const formattedMessages: Message[] = [];
       if (Array.isArray(history)) {
         for (const item of history) {
-          // 假设 history 项格式为 { role, content }
+          // 假设 history 项格式为 { role, content } 或 { role, message: { content } }
           if (typeof item === "object" && item !== null) {
             const msg = item as Record<string, unknown>;
+            // Handle both direct content and nested message.content
+            const rawContent = msg.content ?? (msg.message as Record<string, unknown>)?.content;
             formattedMessages.push({
               id: (msg.id as string) || `msg-${nanoid()}`,
               sessionId: sessionId,
               role: (msg.role as string) || "user",
-              content:
-                typeof msg.content === "string"
-                  ? msg.content
-                  : JSON.stringify(msg.content),
+              content: extractContent(rawContent),
               createdAt: (msg.createdAt as number) || Date.now(),
             });
           }
