@@ -360,10 +360,13 @@ function SessionAndChat({
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
 }) {
-  const { currentSessionId } = useSession();
+  const { currentSessionId, updateTempSessionId } = useSession();
 
   return (
-    <ChatProvider sessionId={currentSessionId}>
+    <ChatProvider
+      sessionId={currentSessionId}
+      onSessionKeyUpdate={updateTempSessionId}
+    >
       <ChatArea
         isMobile={isMobile}
         sidebarOpen={sidebarOpen}

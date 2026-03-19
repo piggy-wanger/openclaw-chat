@@ -27,6 +27,7 @@ type SessionContextType = {
     id: string,
     updates: { title?: string; model?: string }
   ) => Promise<Session | null>;
+  updateTempSessionId: (tempId: string, realSessionKey: string) => void;
   deleteSession: (id: string) => Promise<boolean>;
   selectSession: (id: string | null) => void;
 };
@@ -44,6 +45,12 @@ function sessionEntryToSession(entry: SessionEntry): Session {
     createdAt: entry.updatedAt || Date.now(),
     updatedAt: entry.updatedAt || Date.now(),
   };
+}
+
+// 从 sessionKey 中提取显示名称（最后一段）
+export function extractSessionDisplayName(sessionKey: string): string {
+  const parts = sessionKey.split(":");
+  return parts.length > 1 ? parts[parts.length - 1] : sessionKey;
 }
 
 // Provider
@@ -188,6 +195,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setCurrentSessionId(id);
   }, []);
 
+  // 更新临时会话 ID 为真实的 sessionKey
+  const updateTempSessionId = useCallback(
+    (tempId: string, realSessionKey: string) => {
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === tempId
+            ? {
+                ...s,
+                id: realSessionKey,
+                updatedAt: Date.now(),
+              }
+            : s
+        )
+      );
+
+      // 如果当前选中的是临时会话，更新当前会话 ID
+      setCurrentSessionId((prevId) => (prevId === tempId ? realSessionKey : prevId));
+    },
+    []
+  );
+
   // 使用 ref 追踪是否已经 fetch 过，避免重复 fetch
   const hasFetchedRef = useRef(false);
 
@@ -216,6 +244,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         fetchSessions,
         createSession,
         updateSession,
+        updateTempSessionId,
         deleteSession,
         selectSession,
       }}
