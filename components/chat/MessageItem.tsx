@@ -1,7 +1,8 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import { format } from "date-fns";
+import { Wrench } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { ToolCallList } from "./ToolCallList";
 import { ContentBlockCard } from "./ContentBlockCard";
@@ -11,6 +12,7 @@ import {
   parseToolBlocks,
   getCombinedText,
 } from "@/lib/contentBlocks";
+import { cn } from "@/lib/utils";
 
 type MessageItemProps = {
   message: Message;
@@ -100,11 +102,48 @@ function MessageItemInner({ message, toolCalls }: MessageItemProps) {
           </div>
         )}
 
-        {/* 只在有可见内容（文本气泡或实时工具调用）时显示时间 */}
+        {/* 只在有可见内容时显示时间和工具图标 */}
         {(hasTextContent || hasToolCalls) && (
-          <p className="text-xs text-muted-foreground mt-1">{timestamp}</p>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-xs text-muted-foreground">{timestamp}</p>
+            {hasContentToolBlocks && <ToolToggleButton toolBlocks={toolBlocks} />}
+          </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// 扳手按钮组件 - 点击展开/收起 tool 卡片列表
+function ToolToggleButton({ toolBlocks }: { toolBlocks: ReturnType<typeof parseToolBlocks> }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors",
+          open && "text-foreground bg-muted"
+        )}
+        aria-label="查看工具调用"
+      >
+        <Wrench className="h-3.5 w-3.5" />
+      </button>
+
+      {open && (
+        <>
+          {/* 背景遮罩 */}
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          {/* 卡片弹出层 */}
+          <div className="absolute right-0 bottom-full mb-2 w-80 max-h-96 overflow-y-auto rounded-xl border border-border bg-card shadow-xl p-2 space-y-2 z-40">
+            <p className="text-xs font-medium text-muted-foreground px-1">工具调用</p>
+            {toolBlocks.map((toolBlock) => (
+              <ContentBlockCard key={toolBlock.id} toolBlock={toolBlock} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
