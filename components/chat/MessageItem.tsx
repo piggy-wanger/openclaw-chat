@@ -90,6 +90,22 @@ function MessageItemInner({ message, toolCalls }: MessageItemProps) {
         {hasTextContent && (
           <div className="bg-muted text-foreground rounded-2xl rounded-tl-sm px-4 py-2.5">
             <MarkdownRenderer content={textContent} />
+            {/* 工具使用摘要 */}
+            {hasContentToolBlocks && (
+              <>
+                <div className="border-t border-border my-2" />
+                <p className="text-xs text-muted-foreground">
+                  已使用 Tool：{toolBlocks.map((tb) => tb.name).join("、")}
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* 只有 tool blocks 没有文本时，单独显示摘要 */}
+        {!hasTextContent && hasContentToolBlocks && (
+          <div className="text-xs text-muted-foreground">
+            已使用 Tool：{toolBlocks.map((tb) => tb.name).join("、")}
           </div>
         )}
 
