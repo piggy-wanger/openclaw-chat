@@ -13,6 +13,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Button } from "@/components/ui/button";
 import {
   MessageSquare,
+  MessageCircle,
   RefreshCw,
   AlertCircle,
   WifiOff,
@@ -369,10 +370,12 @@ function ChatArea({
               {/* 加载遮罩 - 初始加载 + 会话切换时覆盖在消息区上方 */}
               {(isSessionSwitching || (messageLoading && isInitialLoad)) && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
-                  <div className="flex flex-col items-center gap-3">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">
-                      {isSessionSwitching ? "加载中..." : "连接中..."}
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {isSessionSwitching ? "切换会话..." : "加载消息..."}
                     </span>
                   </div>
                 </div>
@@ -388,9 +391,11 @@ function ChatArea({
             </>
           ) : sessionLoading ? (
             <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">加载会话...</span>
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                </div>
+                <span className="text-xs text-muted-foreground">加载会话...</span>
               </div>
             </div>
           ) : (
@@ -450,9 +455,18 @@ function MainContent() {
     if (!hasEverConnected.current) {
       return (
         <div className="flex h-screen items-center justify-center bg-background">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">连接中...</span>
+          <div className="flex flex-col items-center gap-4">
+            {/* Logo / 品牌 */}
+            <div className="relative">
+              <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                <MessageCircle className="h-6 w-6 text-primary" />
+              </div>
+              <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-primary animate-pulse" />
+            </div>
+            <div className="text-center space-y-1">
+              <h2 className="text-sm font-medium text-foreground">OpenClaw Chat</h2>
+              <p className="text-xs text-muted-foreground">正在连接 Gateway...</p>
+            </div>
           </div>
         </div>
       );
