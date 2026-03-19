@@ -151,12 +151,15 @@ function ChatArea({
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
 }) {
+  const { client, isConnected } = useGateway();
   const {
     sessions,
     currentSessionId,
     currentSession,
     loading: sessionLoading,
     createSession,
+    createSessionWithOptions,
+    createGroupSession,
     updateSession,
     deleteSession,
     selectSession,
@@ -167,6 +170,8 @@ function ChatArea({
     isStreaming,
     streamContent,
     loading: messageLoading,
+    isSessionSwitching,
+    isInitialLoad,
     error,
     sendMessage,
     abortStream,
@@ -204,13 +209,6 @@ function ChatArea({
     }, [isMobile, sidebarOpen, setSidebarOpen]),
   });
 
-  const handleCreateSession = async () => {
-    await createSession();
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
-  };
-
   const handleSelectSession = (id: string) => {
     selectSession(id);
     if (isMobile) {
@@ -224,6 +222,41 @@ function ChatArea({
 
   const handleDeleteSession = async (id: string) => {
     await deleteSession(id);
+  };
+
+  // Handle creating session with custom options (from dialog)
+  const handleCreateSessionWithOptions = async (options: {
+    sessionName: string;
+    agentId: string;
+    model: string;
+  }) => {
+    await createSessionWithOptions(options);
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+  };
+
+  // Handle creating group (basic implementation for now)
+  const handleCreateGroup = async (options: {
+    groupName: string;
+    agentIds: string[];
+    model?: string;
+  }) => {
+    // Create group session using the hook
+    const groupSession = await createGroupSession(options);
+
+    if (!groupSession) {
+      toast.error("创建群组失败");
+      return;
+    }
+
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+
+    toast.success(`群组 "${options.groupName}" 创建成功`, {
+      description: `包含 ${options.agentIds.length} 个智能体`,
+    });
   };
 
   const handleModelChange = async (model: string | null) => {
@@ -255,10 +288,13 @@ function ChatArea({
       sessions={sessions}
       currentSessionId={currentSessionId}
       loading={sessionLoading}
+      client={client}
+      isConnected={isConnected}
       onSelectSession={handleSelectSession}
       onRenameSession={handleRenameSession}
       onDeleteSession={handleDeleteSession}
-      onCreateSession={handleCreateSession}
+      onCreateSessionWithOptions={handleCreateSessionWithOptions}
+      onCreateGroup={handleCreateGroup}
     />
   );
 
@@ -315,8 +351,24 @@ function ChatArea({
               )}
 
               {/* 消息列表 */}
-              {messageLoading ? (
+              {/* Show skeleton on initial load (first session ever), show loading bar on session switch */}
+              {messageLoading && isInitialLoad ? (
                 <MessageListSkeleton />
+              ) : isSessionSwitching ? (
+                <>
+                  {/* Show subtle loading indicator at top when switching sessions */}
+                  <div className="flex items-center justify-center py-2 border-b border-border bg-muted/30">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mr-2" />
+                    <span className="text-sm text-muted-foreground">加载中...</span>
+                  </div>
+                  <MessageList
+                    messages={messages}
+                    isStreaming={isStreaming}
+                    streamContent={streamContent}
+                    loading={messageLoading}
+                    toolCalls={toolCalls}
+                  />
+                </>
               ) : messages.length === 0 && !isStreaming ? (
                 <NoMessagesState />
               ) : (

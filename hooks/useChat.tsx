@@ -20,6 +20,8 @@ type ChatContextType = {
   isStreaming: boolean;
   streamContent: string;
   loading: boolean;
+  isSessionSwitching: boolean;
+  isInitialLoad: boolean;
   error: string | null;
   toolCalls: ToolCall[];
   fetchMessages: () => Promise<void>;
@@ -45,6 +47,8 @@ export function ChatProvider({
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isSessionSwitching, setIsSessionSwitching] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
 
@@ -53,6 +57,9 @@ export function ChatProvider({
 
   // Session epoch 用于防止竞态条件
   const sessionEpochRef = useRef(0);
+
+  // Track if this is the first fetch (for skeleton vs loading indicator)
+  const hasLoadedOnceRef = useRef(false);
 
   // 获取会话消息
   const fetchMessages = useCallback(async () => {
@@ -64,16 +71,30 @@ export function ChatProvider({
     // 捕获当前 epoch
     const currentEpoch = sessionEpochRef.current;
 
+    // Determine if this is initial load (never loaded before) or session switch
+    const isCurrentlyInitialLoad = !hasLoadedOnceRef.current;
+
+    // 设置加载状态
     setLoading(true);
+    // Only show skeleton on initial load, otherwise show switching indicator
+    if (!isCurrentlyInitialLoad) {
+      setIsSessionSwitching(true);
+    }
     setError(null);
+
+    console.log("[fetchMessages] Fetching history for sessionKey:", sessionId);
+
     try {
       const history = await client.chatHistory({
         sessionKey: sessionId,
         limit: 100,
       });
 
+      console.log("[fetchMessages] History result:", history?.length ?? 0, "messages");
+
       // 检查 epoch 是否匹配，不匹配则丢弃结果（session 已切换）
       if (currentEpoch !== sessionEpochRef.current) {
+        console.log("[fetchMessages] Epoch mismatch, discarding result");
         return;
       }
 
@@ -100,6 +121,9 @@ export function ChatProvider({
       }
 
       setMessages(formattedMessages);
+      // After first successful load, mark that we've loaded once
+      hasLoadedOnceRef.current = true;
+      setIsInitialLoad(false);
     } catch (err) {
       // 检查 epoch 是否匹配
       if (currentEpoch !== sessionEpochRef.current) {
@@ -108,11 +132,12 @@ export function ChatProvider({
       const message =
         err instanceof Error ? err.message : "Failed to fetch messages";
       setError(message);
-      console.error("Error fetching messages:", err);
+      console.error("[fetchMessages] Error:", err);
     } finally {
       // 检查 epoch 是否匹配
       if (currentEpoch === sessionEpochRef.current) {
         setLoading(false);
+        setIsSessionSwitching(false);
       }
     }
   }, [sessionId, client, isConnected]);
@@ -338,12 +363,14 @@ export function ChatProvider({
       abortStream();
     }
 
-    // 重置状态
+    // 重置流式状态，但保留消息（避免闪烁）
     setIsStreaming(false);
     setStreamContent("");
     setToolCalls([]);
     setError(null);
     currentRunIdRef.current = null;
+
+    // 不清空消息，让旧消息保持可见直到新消息加载完成，避免闪烁
 
     // 获取新会话的消息
     fetchMessages();
@@ -356,6 +383,8 @@ export function ChatProvider({
         isStreaming,
         streamContent,
         loading,
+        isSessionSwitching,
+        isInitialLoad,
         error,
         toolCalls,
         fetchMessages,
@@ -376,3 +405,6 @@ export function useChat() {
   }
   return context;
 }
+
+// Export types for external use
+export type { ChatContextType };
