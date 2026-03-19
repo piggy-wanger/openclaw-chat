@@ -1,8 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { formatDistanceToNow } from "date-fns";
-import { zhCN } from "date-fns/locale";
+import { format } from "date-fns";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { ToolCallList } from "./ToolCallList";
 import type { Message, ToolCall } from "@/lib/types";
@@ -15,11 +14,8 @@ type MessageItemProps = {
 function MessageItemInner({ message, toolCalls }: MessageItemProps) {
   const { role, content, createdAt } = message;
 
-  // 格式化时间
-  const timestamp = formatDistanceToNow(createdAt, {
-    addSuffix: true,
-    locale: zhCN,
-  });
+  // 格式化时间（HH:mm）
+  const timestamp = format(new Date(createdAt), "HH:mm");
 
   // 根据角色应用不同样式
   if (role === "system") {
