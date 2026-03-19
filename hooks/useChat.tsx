@@ -262,14 +262,8 @@ export function ChatProvider({
 
       switch (event.state) {
         case "delta":
-          // chat.delta 的 message 是完整累积文本对象，提取后 SET（不是 append）
-          if (event.message) {
-            const text = extractContent(event.message);
-            if (typeof text === "string" && text.trim() && !text.startsWith("NO_REPLY")) {
-              setStreamContent(text);
-              streamContentRef.current = text;
-            }
-          }
+          // 忽略 chat.delta，Gateway 的增量文本通过 agent.assistant 事件发送
+          // chat.delta 的 message 是累积对象，但 extractContent 后用 SET 会覆盖追加的内容
           break;
 
         case "final":
