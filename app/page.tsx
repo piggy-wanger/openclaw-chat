@@ -432,6 +432,7 @@ function SessionAndChat({
 function MainContent() {
   const [isMobile, setIsMobile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const hasEverConnected = useRef(false);
   const { status } = useGateway();
 
   // 检测移动端
@@ -444,8 +445,18 @@ function MainContent() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // 未连接时显示空状态
+  // 未连接时显示加载页（首次）或断连状态
   if (status !== "connected") {
+    if (!hasEverConnected.current) {
+      return (
+        <div className="flex h-screen items-center justify-center bg-background">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">连接中...</span>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex h-screen bg-background">
         <ConnectionStatus />
@@ -455,6 +466,7 @@ function MainContent() {
       </div>
     );
   }
+  hasEverConnected.current = true;
 
   return (
     <div className="flex h-screen bg-background">
