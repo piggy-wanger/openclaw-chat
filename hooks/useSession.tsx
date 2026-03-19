@@ -61,9 +61,15 @@ function sessionEntryToSession(entry: SessionEntry): Session {
 // 从 sessionKey 中提取显示名称（最后一段）
 export function extractSessionDisplayName(sessionKey: string): string {
   const parts = sessionKey.split(":");
-  // agent:<agentId>:<sessionName> → agentId:sessionName
+  // agent:<agentId>:<sessionName>[:<nanoid>] → agentId:sessionName
   if (parts.length > 2 && parts[0] === "agent") {
-    return parts.slice(1).join(":");
+    // 去掉 "agent" 前缀和可能的 nanoid 后缀
+    let nameParts = parts.slice(1);
+    const last = nameParts[nameParts.length - 1];
+    if (/^[a-z0-9]{6,8}$/.test(last)) {
+      nameParts = nameParts.slice(0, -1);
+    }
+    return nameParts.join(":") || sessionKey;
   }
   return parts.length > 1 ? parts[parts.length - 1] : sessionKey;
 }
@@ -95,13 +101,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         limit: 100,
         includeDerivedTitles: true,
       });
-      console.log("[fetchSessions] Gateway returned", entries.length, "sessions:", entries.map(e => ({ key: e.key, title: e.title, origin: e.origin })));
+
       // 转换为 Session 类型并按 updatedAt 降序排列
       const sessionList = entries
         .filter(e => e.origin != null)
         .map(sessionEntryToSession)
         .sort((a, b) => b.updatedAt - a.updatedAt);
-      console.log("[fetchSessions] Mapped to", sessionList.length, "sessions:", sessionList.map(s => ({ id: s.id, title: s.title, type: s.type })));
+
       setSessions(sessionList);
     } catch (err) {
       const message =
@@ -220,6 +226,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         await client.sessionsPatch({
           key: id,
           title: updates.title,
+          model: updates.model,
         });
 
         // 更新本地状态
@@ -228,8 +235,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             s.id === id
               ? {
                   ...s,
-                  ...(updates.title && { title: updates.title }),
-                  ...(updates.model && { model: updates.model }),
+                  ...updates,
                   updatedAt: Date.now(),
                 }
               : s

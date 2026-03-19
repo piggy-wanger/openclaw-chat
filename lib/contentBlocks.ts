@@ -50,27 +50,16 @@ export function isBlockContent(content: unknown): content is ContentBlock[] {
 export function parseToolBlocks(content: ContentBlock[]): ParsedToolBlock[] {
   const toolBlocks: ParsedToolBlock[] = [];
 
-  // First pass: collect all tool_use blocks
   for (const block of content) {
     if (block.type === "tool_use") {
-      toolBlocks.push({
-        id: block.id,
-        name: block.name,
-        input: block.input,
-      });
+      toolBlocks.push({ id: block.id, name: block.name, input: block.input });
     } else if (block.type === "tool_call") {
-      // Handle OpenAI-style tool_call format
       let args: Record<string, unknown> = {};
-      try {
-        args = JSON.parse(block.function.arguments);
-      } catch {
-        args = { raw: block.function.arguments };
-      }
-      toolBlocks.push({
-        id: block.id,
-        name: block.function.name,
-        input: args,
-      });
+      try { args = JSON.parse(block.function.arguments); } catch { args = { raw: block.function.arguments }; }
+      toolBlocks.push({ id: block.id, name: block.function.name, input: args });
+    } else if (block.type === "toolCall") {
+      // OpenClaw 自定义格式（camelCase），arguments 已经是对象
+      toolBlocks.push({ id: block.id, name: block.name, input: block.arguments ?? {} });
     }
   }
 
@@ -110,7 +99,7 @@ export function parseToolBlocks(content: ContentBlock[]): ParsedToolBlock[] {
  */
 export function hasToolBlocks(content: ContentBlock[]): boolean {
   return content.some(
-    (block) => block.type === "tool_use" || block.type === "tool_call"
+    (block) => block.type === "tool_use" || block.type === "tool_call" || block.type === "toolCall"
   );
 }
 

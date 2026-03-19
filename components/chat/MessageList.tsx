@@ -59,6 +59,7 @@ function MessageListInner({
   // 使用 ref 跟踪滚动状态，避免 effect 中的 setState
   const shouldAutoScrollRef = useRef(true);
   const prevIsStreamingRef = useRef(false);
+  const prevMessageCountRef = useRef(0);
 
   // 滚动到底部
   const scrollToBottom = useCallback((smooth = true) => {
@@ -94,6 +95,17 @@ function MessageListInner({
       shouldAutoScrollRef.current = true;
     }
     prevIsStreamingRef.current = isStreaming;
+
+    // 消息从 0 变为非 0（异步加载完成），强制滚到底部
+    if (messages.length > 0 && prevMessageCountRef.current === 0) {
+      // 用 requestAnimationFrame 确保 DOM 已更新
+      requestAnimationFrame(() => {
+        if (viewportRef.current) {
+          viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
+        }
+      });
+    }
+    prevMessageCountRef.current = messages.length;
 
     if (shouldAutoScrollRef.current) {
       if (!hasMountedRef.current) {

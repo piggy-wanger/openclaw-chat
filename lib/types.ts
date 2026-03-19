@@ -126,12 +126,21 @@ export type ToolCallContentBlock = {
   };
 };
 
+// OpenClaw 自定义 toolCall block（camelCase，包含完整 arguments）
+export type ToolCallOCBlock = {
+  type: "toolCall";
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+};
+
 export type ContentBlock =
   | TextContentBlock
   | ThinkingContentBlock
   | ToolUseContentBlock
   | ToolResultContentBlock
-  | ToolCallContentBlock;
+  | ToolCallContentBlock
+  | ToolCallOCBlock;
 
 // Parsed tool block for display (combines tool_use with matching tool_result)
 export type ParsedToolBlock = {

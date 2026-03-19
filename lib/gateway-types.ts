@@ -47,6 +47,8 @@ export type SessionEntry = {
 export type SessionsPatchOpts = {
   key: string;
   title?: string;
+  model?: string;
+  thinkingLevel?: string;
   archived?: boolean;
   pinned?: boolean;
 };

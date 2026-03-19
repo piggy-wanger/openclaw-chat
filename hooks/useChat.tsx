@@ -15,10 +15,10 @@ import type { Message, ToolCall, ToolCallStatus, ContentBlock } from "@/lib/type
 import { extractTextContent, parseContentBlocks } from "@/lib/contentBlocks";
 import { nanoid } from "nanoid";
 
-// Re-export extractTextContent as extractContent for backward compatibility
 const extractContent = extractTextContent;
 
-// Context 类型
+// ========== Context 类型 ==========
+
 type ChatContextType = {
   messages: Message[];
   isStreaming: boolean;
@@ -33,10 +33,10 @@ type ChatContextType = {
   abortStream: () => void;
 };
 
-// Context
 const ChatContext = createContext<ChatContextType | null>(null);
 
-// Provider - 需要 sessionId 作为参数
+// ========== Provider ==========
+
 export function ChatProvider({
   children,
   sessionId,
@@ -56,7 +56,15 @@ export function ChatProvider({
   const [error, setError] = useState<string | null>(null);
   const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
 
-  // 包装 setMessages，同步到缓存
+  const currentRunIdRef = useRef<string | null>(null);
+  const streamContentRef = useRef("");
+  const toolCallsRef = useRef<ToolCall[]>([]);
+  const sessionEpochRef = useRef(0);
+  const hasLoadedOnceRef = useRef(false);
+
+  // 内存缓存：sessionId → Message[]
+  const messagesCacheRef = useRef<Map<string, Message[]>>(new Map());
+
   const setMessagesWithCache = useCallback((updater: Message[] | ((prev: Message[]) => Message[])) => {
     setMessages((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
@@ -67,40 +75,18 @@ export function ChatProvider({
     });
   }, [sessionId]);
 
-  // 当前运行的 runId
-  const currentRunIdRef = useRef<string | null>(null);
-  const streamContentRef = useRef("");
-  const toolCallsRef = useRef<ToolCall[]>([]);
-
-  // Session epoch 用于防止竞态条件
-  const sessionEpochRef = useRef(0);
-
-  // Track if this is the first fetch (for skeleton vs loading indicator)
-  const hasLoadedOnceRef = useRef(false);
-
-  // 本地消息缓存：sessionId → Message[]
-  const messagesCacheRef = useRef<Map<string, Message[]>>(new Map());
-
   // 获取会话消息
-  const fetchMessages = useCallback(async (opts?: { preserveEmpty?: boolean }) => {
-    if (!sessionId || !isConnected) {
-      return;
-    }
+  const fetchMessages = useCallback(async () => {
+    if (!sessionId || !isConnected) return;
 
-    // 捕获当前 epoch
     const currentEpoch = sessionEpochRef.current;
-
-    // Determine if this is initial load (never loaded before) or session switch
     const isCurrentlyInitialLoad = !hasLoadedOnceRef.current;
 
-    // 设置加载状态
     setLoading(true);
-    // Only show skeleton on initial load, otherwise show switching indicator
     if (!isCurrentlyInitialLoad) {
       setIsSessionSwitching(true);
     }
     setError(null);
-
 
     try {
       const history = await client.chatHistory({
@@ -108,91 +94,31 @@ export function ChatProvider({
         limit: 100,
       });
 
-      console.log("[fetchMessages] raw history:", JSON.stringify(history).slice(0, 1000));
+      if (currentEpoch !== sessionEpochRef.current) return;
 
-      // history 返回 { messages: [...] }，需要取 .messages
       const historyData = history as unknown as Record<string, unknown>;
       const messagesArr = Array.isArray(historyData?.messages) ? historyData.messages : Array.isArray(history) ? history : [];
 
+      if (currentEpoch !== sessionEpochRef.current) return;
 
-      // 检查 epoch 是否匹配，不匹配则丢弃结果（session 已切换）
-      if (currentEpoch !== sessionEpochRef.current) {
-        return;
-      }
+      const formatted = parseGatewayMessages(messagesArr, sessionId);
 
-      // 转换历史记录为 Message 格式，提取 tool 调用附加到 assistant 消息
-      const formattedMessages: Message[] = [];
-      let pendingToolCalls: ToolCall[] = [];
-
-      for (const item of messagesArr) {
-          if (typeof item !== "object" || item === null) continue;
-          const msg = item as Record<string, unknown>;
-          const role = (msg.role as string)?.toLowerCase();
-
-          if (role === "tool" || role === "tool_result" || role === "toolresult" || role === "function") {
-            // 提取 tool 调用信息
-            const toolName = msg.name ?? (msg.function as Record<string, unknown>)?.name ?? "tool";
-            const toolId = msg.tool_call_id ?? msg.id ?? `tool-${nanoid()}`;
-            const toolResult = typeof msg.content === "string" ? msg.content : msg.result ?? JSON.stringify(msg.content ?? msg.result ?? "");
-            const isError = msg.is_error === true || role === "toolresult";
-            pendingToolCalls.push({
-              id: toolId as string,
-              name: toolName as string,
-              arguments: {},
-              status: isError ? "error" : "success",
-              result: toolResult as string,
-              startedAt: (msg.createdAt as number) || Date.now(),
-              completedAt: Date.now(),
-            });
-            continue;
-          }
-
-          const rawContent = msg.content ?? (msg.message as Record<string, unknown>)?.content;
-          let parsedContent: unknown = rawContent;
-          if (typeof rawContent === "string" && rawContent.trim().startsWith("[")) {
-            try { parsedContent = JSON.parse(rawContent); } catch { /* keep as string */ }
-          }
-          const blocks = parseContentBlocks(parsedContent);
-          const messageContent: string | ContentBlock[] = blocks ?? extractContent(parsedContent);
-
-          const message: Message = {
-            id: (msg.id as string) || `msg-${nanoid()}`,
-            sessionId: sessionId,
-            role: (msg.role as string) || "user",
-            content: messageContent,
-            createdAt: (msg.createdAt as number) || Date.now(),
-          };
-
-          // assistant 消息：附加上一条累积的 tool 调用
-          if (role === "assistant" && pendingToolCalls.length > 0) {
-            (message as Record<string, unknown>).toolCalls = [...pendingToolCalls];
-            pendingToolCalls = [];
-          }
-
-          formattedMessages.push(message);
-      }
-
-      // 如果本地缓存已有消息，优先使用缓存（保留 toolCalls 等额外信息）
+      // 内存缓存优先（保留 streaming 时组装的完整 toolCalls）
       const cached = sessionId ? messagesCacheRef.current.get(sessionId) : null;
       if (cached && cached.length > 0) {
         setMessagesWithCache(cached);
-      } else if (formattedMessages.length > 0) {
-        setMessagesWithCache(formattedMessages);
+      } else if (formatted.length > 0) {
+        setMessagesWithCache(formatted);
       }
-      // After first successful load, mark that we've loaded once
+
       hasLoadedOnceRef.current = true;
       setIsInitialLoad(false);
     } catch (err) {
-      // 检查 epoch 是否匹配
-      if (currentEpoch !== sessionEpochRef.current) {
-        return;
-      }
-      const message =
-        err instanceof Error ? err.message : "Failed to fetch messages";
+      if (currentEpoch !== sessionEpochRef.current) return;
+      const message = err instanceof Error ? err.message : "Failed to fetch messages";
       setError(message);
       console.error("[fetchMessages] Error:", err);
     } finally {
-      // 检查 epoch 是否匹配
       if (currentEpoch === sessionEpochRef.current) {
         setLoading(false);
         setIsSessionSwitching(false);
@@ -203,13 +129,10 @@ export function ChatProvider({
   // 发送消息
   const sendMessage = useCallback(
     async (content: string) => {
-      if (!sessionId || !content.trim() || isStreaming || !isConnected) {
-        return;
-      }
+      if (!sessionId || !content.trim() || isStreaming || !isConnected) return;
 
       setError(null);
 
-      // 1. 乐观更新：立即添加用户消息
       const tempUserMessage: Message = {
         id: `temp-user-${nanoid()}`,
         sessionId,
@@ -224,22 +147,15 @@ export function ChatProvider({
       setIsStreaming(true);
 
       try {
-        // 2. 调用 Gateway chat.send
         const result = await client.chatSend({
           sessionKey: sessionId,
           message: content.trim(),
           idempotencyKey: nanoid(),
         });
-
         currentRunIdRef.current = result.runId;
-
-        // 注意：流式响应通过事件监听处理
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to send message";
+        const message = err instanceof Error ? err.message : "Failed to send message";
         setError(message);
-        console.error("Error sending message:", err);
-        // 移除乐观添加的用户消息
         setMessagesWithCache((prev) => prev.filter((m) => m.id !== tempUserMessage.id));
         setIsStreaming(false);
       }
@@ -272,16 +188,12 @@ export function ChatProvider({
   // 处理 chat 事件
   useEffect(() => {
     const handleChat = (event: ChatEvent) => {
-      // 检查是否是临时会话
       const isTempSession = sessionId?.startsWith("temp-");
 
-      // 对于临时会话，接收第一个带有真实 sessionKey 的事件
       if (isTempSession && sessionId && !event.sessionKey.startsWith("temp-")) {
-        // 更新临时会话 ID 为真实 sessionKey
         onSessionKeyUpdate?.(sessionId, event.sessionKey);
       }
 
-      // 只处理当前 session 的事件（包括临时会话的情况）
       const isCurrentSession = isTempSession
         ? !event.sessionKey.startsWith("temp-") || event.sessionKey === sessionId
         : event.sessionKey === sessionId;
@@ -290,20 +202,13 @@ export function ChatProvider({
 
       switch (event.state) {
         case "delta":
-          // 忽略 chat.delta，Gateway 的增量文本通过 agent.assistant 事件发送
-          // chat.delta 的 message 是累积对象，但 extractContent 后用 SET 会覆盖追加的内容
           break;
 
-        case "final":
-          // 流完成 - 保存流式内容为正式消息，附带 tool 调用信息
+        case "final": {
           const rawMessage = event.message;
           let finalUsed = false;
 
-          // 收集当前 tool calls（用 ref 避免闭包问题）
-          const savedToolCalls = toolCallsRef.current;
-
           if (rawMessage) {
-            console.log("[chat.final] raw message:", JSON.stringify(rawMessage).slice(0, 500));
             const rawContent = typeof rawMessage === "object" && rawMessage !== null && "content" in (rawMessage as Record<string, unknown>)
               ? (rawMessage as Record<string, unknown>).content
               : rawMessage;
@@ -314,6 +219,59 @@ export function ChatProvider({
             }
 
             const blocks = parseContentBlocks(parsedFinalContent);
+
+            // 优先从 content blocks 提取完整 toolCalls（含 arguments）
+            const agentToolCalls = toolCallsRef.current;
+            let finalToolCalls: ToolCall[] = [];
+
+            if (blocks) {
+              for (const block of blocks) {
+                if (block.type === "toolCall") {
+                  const agentTC = agentToolCalls.find((tc) => tc.id === block.id);
+                  finalToolCalls.push({
+                    id: block.id,
+                    name: block.name,
+                    arguments: (block as import("@/lib/types").ToolCallOCBlock).arguments ?? {},
+                    status: agentTC?.status ?? "success",
+                    result: agentTC?.result,
+                    error: agentTC?.error,
+                    startedAt: agentTC?.startedAt,
+                    completedAt: agentTC?.completedAt,
+                  });
+                } else if (block.type === "tool_use") {
+                  const agentTC = agentToolCalls.find((tc) => tc.id === block.id);
+                  finalToolCalls.push({
+                    id: block.id,
+                    name: block.name,
+                    arguments: block.input ?? {},
+                    status: agentTC?.status ?? "success",
+                    result: agentTC?.result,
+                    error: agentTC?.error,
+                    startedAt: agentTC?.startedAt,
+                    completedAt: agentTC?.completedAt,
+                  });
+                } else if (block.type === "tool_call") {
+                  const agentTC = agentToolCalls.find((tc) => tc.id === block.id);
+                  let args: Record<string, unknown> = {};
+                  try { args = JSON.parse(block.function.arguments); } catch { /* ignore */ }
+                  finalToolCalls.push({
+                    id: block.id,
+                    name: block.function.name,
+                    arguments: args,
+                    status: agentTC?.status ?? "success",
+                    result: agentTC?.result,
+                    error: agentTC?.error,
+                    startedAt: agentTC?.startedAt,
+                    completedAt: agentTC?.completedAt,
+                  });
+                }
+              }
+            }
+
+            if (finalToolCalls.length === 0 && agentToolCalls.length > 0) {
+              finalToolCalls = agentToolCalls;
+            }
+
             if (blocks) {
               setMessagesWithCache((prev) => [...prev, {
                 id: `msg-final-${nanoid()}`,
@@ -321,7 +279,7 @@ export function ChatProvider({
                 role: "assistant",
                 content: blocks,
                 createdAt: Date.now(),
-                toolCalls: savedToolCalls.length > 0 ? savedToolCalls : undefined,
+                toolCalls: finalToolCalls.length > 0 ? finalToolCalls : undefined,
               }]);
               finalUsed = true;
             } else {
@@ -333,7 +291,7 @@ export function ChatProvider({
                   role: "assistant",
                   content: textContent,
                   createdAt: Date.now(),
-                  toolCalls: savedToolCalls.length > 0 ? savedToolCalls : undefined,
+                  toolCalls: finalToolCalls.length > 0 ? finalToolCalls : undefined,
                 }]);
                 finalUsed = true;
               }
@@ -347,25 +305,24 @@ export function ChatProvider({
               role: "assistant",
               content: streamContentRef.current,
               createdAt: Date.now(),
-              toolCalls: savedToolCalls.length > 0 ? savedToolCalls : undefined,
+              toolCalls: toolCallsRef.current.length > 0 ? toolCallsRef.current : undefined,
             }]);
           }
+
           streamContentRef.current = "";
           setStreamContent("");
           setIsStreaming(false);
           currentRunIdRef.current = null;
-          // 不再调用 fetchMessages，因为 Gateway 的 chat.history 返回 0
           break;
+        }
 
         case "aborted":
-          // 流中止
           setIsStreaming(false);
           setStreamContent("");
           currentRunIdRef.current = null;
           break;
 
         case "error":
-          // 错误
           setError(event.errorMessage || "Unknown error");
           setIsStreaming(false);
           setStreamContent("");
@@ -376,22 +333,16 @@ export function ChatProvider({
 
     const unsubscribe = client.on("chat", handleChat);
     return () => unsubscribe();
-  }, [sessionId, client, fetchMessages, onSessionKeyUpdate]);
+  }, [sessionId, client, onSessionKeyUpdate]);
 
   // 处理 agent 事件（工具调用 + 流式助手回复）
   useEffect(() => {
     const handleAgent = (event: AgentEvent) => {
-      // 只处理当前 session 的事件
       if (event.sessionKey && event.sessionKey !== sessionId) return;
+      if (currentRunIdRef.current && event.runId !== currentRunIdRef.current) return;
 
-      // 只处理当前 run 的事件
-      if (currentRunIdRef.current && event.runId !== currentRunIdRef.current)
-        return;
-
-      // agent.assistant 事件携带增量 delta（Gateway 不发 chat.delta）
       if (event.stream === "assistant" && event.data) {
         const delta = (event.data as Record<string, unknown>).delta;
-        console.log("[agent.assistant] raw event.data:", JSON.stringify(event.data).slice(0, 500));
         if (typeof delta === "string" && delta.trim() && !delta.startsWith("NO_REPLY")) {
           setIsStreaming(true);
           setStreamContent((prev) => {
@@ -404,73 +355,42 @@ export function ChatProvider({
 
       if (event.stream === "tool" && event.data) {
         const { toolCallId, name, args, phase, result, isError } = event.data;
-
         if (!toolCallId) return;
 
         setToolCalls((prev) => {
           const existing = prev.find((tc) => tc.id === toolCallId);
 
           if (existing) {
-            // 更新现有工具调用
             const updated = prev.map((tc) => {
               if (tc.id !== toolCallId) return tc;
-
-              const status: ToolCallStatus = isError
-                ? "error"
-                : phase === "result"
-                  ? "success"
-                  : "running";
-
+              const status: ToolCallStatus = isError ? "error" : phase === "result" ? "success" : "running";
               return {
                 ...tc,
                 status,
-                result:
-                  result !== undefined
-                    ? typeof result === "string"
-                      ? result
-                      : JSON.stringify(result)
-                    : tc.result,
+                result: result !== undefined ? (typeof result === "string" ? result : JSON.stringify(result)) : tc.result,
                 error: isError ? String(result) : tc.error,
-                completedAt:
-                  phase === "result" ? Date.now() : tc.completedAt,
+                completedAt: phase === "result" ? Date.now() : tc.completedAt,
               };
             });
             toolCallsRef.current = updated;
             return updated;
           } else {
-            // 创建新的工具调用
-            const status: ToolCallStatus = isError
-              ? "error"
-              : phase === "result"
-                ? "success"
-                : "running";
-
-            const newToolCall: ToolCall = {
+            const status: ToolCallStatus = isError ? "error" : phase === "result" ? "success" : "running";
+            const newTC: ToolCall = {
               id: toolCallId,
               name: name || "unknown",
               arguments: args || {},
               status,
-              result:
-                result !== undefined
-                  ? typeof result === "string"
-                    ? result
-                    : JSON.stringify(result)
-                  : undefined,
+              result: result !== undefined ? (typeof result === "string" ? result : JSON.stringify(result)) : undefined,
               error: isError ? String(result) : undefined,
               startedAt: Date.now(),
               completedAt: phase === "result" ? Date.now() : undefined,
             };
-
-            const next = [...prev, newToolCall];
+            const next = [...prev, newTC];
             toolCallsRef.current = next;
             return next;
           }
         });
-      }
-
-      // lifecycle 事件可以用于更新全局运行状态
-      if (event.stream === "lifecycle" && event.data) {
-        // 可以在这里处理 lifecycle start/end
       }
     };
 
@@ -478,31 +398,24 @@ export function ChatProvider({
     return () => unsubscribe();
   }, [sessionId, client]);
 
-  // sessionId 变化时：中断旧请求，清理事件监听，获取新消息
-  // 使用 useLayoutEffect 避免中间帧闪烁（在浏览器绘制前同步更新状态）
+  // sessionId 变化时：中断旧请求，恢复缓存，获取新消息
   useLayoutEffect(() => {
-    // 递增 epoch 以使旧的 fetchMessages 结果失效
     sessionEpochRef.current++;
 
-    // 中断旧的流式请求
     if (currentRunIdRef.current) {
       abortStream();
     }
 
-    // 重置流式状态，但保留消息（避免闪烁）
     setIsStreaming(false);
     setStreamContent("");
     setToolCalls([]);
     setError(null);
     currentRunIdRef.current = null;
-    // 立即标记为切换中，防止 messages 为空时闪 NoMessagesState
     setIsSessionSwitching(true);
 
-    // 从缓存恢复消息，或清空（新会话）
     const cached = sessionId ? messagesCacheRef.current.get(sessionId) : null;
-    setMessagesWithCache(cached ?? []);
+    setMessages(cached ?? []);
 
-    // 获取新会话的消息（Gateway 历史作为补充，不清空缓存）
     fetchMessages();
   }, [sessionId, fetchMessages, abortStream]);
 
@@ -527,6 +440,118 @@ export function ChatProvider({
   );
 }
 
+// ========== 辅助函数 ==========
+
+/** 解析 Gateway chat.history 返回的原始消息数组 */
+function parseGatewayMessages(messagesArr: unknown[], sessionId: string): Message[] {
+  const toolInfoMap = new Map<string, { name: string; input: Record<string, unknown> }>();
+  const toolResultMap = new Map<string, { result: string; isError: boolean }>();
+
+  // 第一遍：收集所有 assistant content blocks 里的 toolCall/tool_use（name + arguments）
+  for (const item of messagesArr) {
+    if (typeof item !== "object" || item === null) continue;
+    const msg = item as Record<string, unknown>;
+    const role = (msg.role as string)?.toLowerCase();
+    if (role !== "assistant") continue;
+
+    const rawContent = msg.content ?? (msg.message as Record<string, unknown>)?.content;
+    let parsedContent: unknown = rawContent;
+    if (typeof rawContent === "string" && rawContent.trim().startsWith("[")) {
+      try { parsedContent = JSON.parse(rawContent); } catch { /* keep as string */ }
+    }
+    const blocks = parseContentBlocks(parsedContent);
+    if (!blocks) continue;
+
+    for (const block of blocks) {
+      if (block.type === "toolCall") {
+        toolInfoMap.set(block.id, {
+          name: block.name,
+          input: (block as import("@/lib/types").ToolCallOCBlock).arguments ?? {},
+        });
+      } else if (block.type === "tool_use") {
+        toolInfoMap.set(block.id, { name: block.name, input: block.input ?? {} });
+      } else if (block.type === "tool_call") {
+        let args: Record<string, unknown> = {};
+        try { args = JSON.parse(block.function.arguments); } catch { args = { raw: block.function.arguments }; }
+        toolInfoMap.set(block.id, { name: block.function.name, input: args });
+      }
+    }
+  }
+
+  // 第一遍补充：收集 tool_result 消息的 result
+  for (const item of messagesArr) {
+    if (typeof item !== "object" || item === null) continue;
+    const msg = item as Record<string, unknown>;
+    const role = (msg.role as string)?.toLowerCase();
+    if (role !== "tool" && role !== "tool_result" && role !== "toolresult") continue;
+
+    const toolId = msg.toolCallId ?? msg.tool_call_id ?? msg.tool_use_id ?? msg.id;
+    if (toolId) {
+      const rawResult = msg.content ?? msg.result;
+      const result = typeof rawResult === "string" ? rawResult : JSON.stringify(rawResult ?? "");
+      const isError = msg.is_error === true || msg.isError === true;
+      toolResultMap.set(toolId as string, { result, isError });
+    }
+  }
+
+  // 第二遍：组装消息
+  const formatted: Message[] = [];
+  let pendingToolCalls: ToolCall[] = [];
+
+  for (const item of messagesArr) {
+    if (typeof item !== "object" || item === null) continue;
+    const msg = item as Record<string, unknown>;
+    const role = (msg.role as string)?.toLowerCase();
+
+    // 跳过 tool_result 消息（信息已合并到 assistant 消息）
+    if (role === "tool" || role === "tool_result" || role === "toolresult" || role === "function") {
+      // 从 assistant content blocks 和 tool_result 消息合并 toolCalls
+      const toolId = msg.toolCallId ?? msg.tool_call_id ?? msg.tool_use_id ?? msg.id ?? `tool-${nanoid()}`;
+      const info = toolInfoMap.get(toolId as string);
+      const resultInfo = toolResultMap.get(toolId as string);
+      const toolName = msg.toolName ?? msg.name
+        ?? (msg.function as Record<string, unknown>)?.name
+        ?? info?.name
+        ?? "tool";
+      pendingToolCalls.push({
+        id: toolId as string,
+        name: toolName as string,
+        arguments: info?.input ?? {},
+        status: resultInfo?.isError ? "error" : "success",
+        result: resultInfo?.result,
+        startedAt: (msg.createdAt as number) || Date.now(),
+        completedAt: Date.now(),
+      });
+      continue;
+    }
+
+    const rawContent = msg.content ?? (msg.message as Record<string, unknown>)?.content;
+    let parsedContent: unknown = rawContent;
+    if (typeof rawContent === "string" && rawContent.trim().startsWith("[")) {
+      try { parsedContent = JSON.parse(rawContent); } catch { /* keep as string */ }
+    }
+    const blocks = parseContentBlocks(parsedContent);
+    const messageContent: string | ContentBlock[] = blocks ?? extractContent(parsedContent);
+
+    const message: Message = {
+      id: (msg.id as string) || `msg-${nanoid()}`,
+      sessionId,
+      role: (msg.role as string) || "user",
+      content: messageContent,
+      createdAt: (msg.createdAt as number) || Date.now(),
+    };
+
+    if (role === "assistant" && pendingToolCalls.length > 0) {
+      (message as Record<string, unknown>).toolCalls = [...pendingToolCalls];
+      pendingToolCalls = [];
+    }
+
+    formatted.push(message);
+  }
+
+  return formatted;
+}
+
 // Hook
 export function useChat() {
   const context = useContext(ChatContext);
@@ -536,5 +561,4 @@ export function useChat() {
   return context;
 }
 
-// Export types for external use
 export type { ChatContextType };

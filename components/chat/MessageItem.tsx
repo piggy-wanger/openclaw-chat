@@ -4,7 +4,6 @@ import { memo, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Wrench } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-import { ToolCallList } from "./ToolCallList";
 import { ContentBlockCard } from "./ContentBlockCard";
 import type { Message, ToolCall } from "@/lib/types";
 import {
@@ -27,20 +26,46 @@ function MessageItemInner({ message, toolCalls: realtimeToolCalls }: MessageItem
   // 格式化时间（HH:mm）
   const timestamp = format(new Date(createdAt), "HH:mm");
 
-  // Parse content blocks
+  // Parse content blocks 并用 allToolCalls 的 result 补充
   const { toolBlocks, textContent } = useMemo(() => {
     const blocks = parseContentBlocks(content);
     if (blocks) {
-      return {
-        toolBlocks: parseToolBlocks(blocks),
-        textContent: getCombinedText(blocks),
-      };
+      const raw = parseToolBlocks(blocks);
+      // 用 allToolCalls（来自 SQLite，有 result）补充 content blocks 缺少的 result
+      if (allToolCalls && allToolCalls.length > 0) {
+        const tcMap = new Map(allToolCalls.map((tc) => [tc.id, tc]));
+        const enriched = raw.map((tb) => {
+          const match = tcMap.get(tb.id);
+          if (match) {
+            return {
+              ...tb,
+              result: tb.result || match.result,
+              isError: tb.isError || match.status === "error",
+            };
+          }
+          return tb;
+        });
+        // content 里没有但 allToolCalls 里有的（补回）
+        for (const tc of allToolCalls) {
+          if (!raw.some((tb) => tb.id === tc.id)) {
+            enriched.push({
+              id: tc.id,
+              name: tc.name,
+              input: tc.arguments,
+              result: tc.result,
+              isError: tc.status === "error",
+            });
+          }
+        }
+        return { toolBlocks: enriched, textContent: getCombinedText(blocks) };
+      }
+      return { toolBlocks: raw, textContent: getCombinedText(blocks) };
     }
     return {
       toolBlocks: [],
       textContent: typeof content === "string" ? content : "",
     };
-  }, [content]);
+  }, [content, allToolCalls]);
 
   // Check if we're using block format with tools
   const hasContentToolBlocks = toolBlocks.length > 0;
@@ -78,6 +103,9 @@ function MessageItemInner({ message, toolCalls: realtimeToolCalls }: MessageItem
   const hasToolCalls = allToolCalls && allToolCalls.length > 0;
   const hasTextContent = textContent.trim().length > 0;
 
+  // 没有文本内容的 assistant 消息不渲染（纯 tool call 消息是历史数据的中间产物）
+  if (!hasTextContent) return null;
+
   return (
     <div className="flex justify-start mb-4">
       <div className="max-w-[80%] md:max-w-[70%]">
@@ -88,8 +116,8 @@ function MessageItemInner({ message, toolCalls: realtimeToolCalls }: MessageItem
           </div>
         )}
 
-        {/* 只在有可见内容时显示时间和工具图标 */}
-        {(hasTextContent || hasToolCalls) && (
+        {/* 时间和工具图标 */}
+        {hasTextContent && (
           <div className="flex items-center justify-between mt-1">
             <p className="text-xs text-muted-foreground">{timestamp}</p>
             {(hasContentToolBlocks || hasToolCalls) && <ToolToggleButton toolBlocks={toolBlocks} toolCalls={allToolCalls} />}
@@ -130,9 +158,6 @@ function ToolToggleButton({ toolBlocks, toolCalls }: { toolBlocks: ReturnType<ty
             {toolBlocks.map((toolBlock) => (
               <ContentBlockCard key={toolBlock.id} toolBlock={toolBlock} />
             ))}
-            {toolCalls && toolCalls.length > 0 && (
-              <ToolCallList toolCalls={toolCalls} />
-            )}
           </div>
         </>
       )}
