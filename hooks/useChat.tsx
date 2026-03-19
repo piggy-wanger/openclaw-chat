@@ -147,8 +147,12 @@ export function ChatProvider({
           }
         }
 
-      // 如果历史为空，不清空现有消息（避免覆盖本地状态）
-      if (formattedMessages.length > 0) {
+      // 如果本地缓存已有消息，优先使用缓存（保留 toolCalls 等额外信息）
+      // Gateway 历史消息会丢失 toolCalls 信息
+      const cached = sessionId ? messagesCacheRef.current.get(sessionId) : null;
+      if (cached && cached.length > 0) {
+        setMessagesWithCache(cached);
+      } else if (formattedMessages.length > 0) {
         setMessagesWithCache(formattedMessages);
       }
       // After first successful load, mark that we've loaded once
