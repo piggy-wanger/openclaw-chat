@@ -81,26 +81,10 @@ function MessageItemInner({ message, toolCalls: realtimeToolCalls }: MessageItem
   return (
     <div className="flex justify-start mb-4">
       <div className="max-w-[80%] md:max-w-[70%]">
-        {/* Tool blocks from content - rendered inline before text */}
-        {hasContentToolBlocks && (
-          <div className="space-y-2 mb-2">
-            {toolBlocks.map((toolBlock) => (
-              <ContentBlockCard key={toolBlock.id} toolBlock={toolBlock} />
-            ))}
-          </div>
-        )}
-
         {/* Text content in bubble */}
         {hasTextContent && (
           <div className="bg-muted text-foreground rounded-2xl rounded-tl-sm px-4 py-2.5">
             <MarkdownRenderer content={textContent} />
-          </div>
-        )}
-
-        {/* Real-time tool calls (from agent stream) */}
-        {hasToolCalls && (
-          <div className="mt-2">
-            <ToolCallList toolCalls={allToolCalls} />
           </div>
         )}
 
