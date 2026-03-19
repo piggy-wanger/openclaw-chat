@@ -55,14 +55,19 @@ function MessageListInner({
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const hasMountedRef = useRef(false);
   // 使用 ref 跟踪滚动状态，避免 effect 中的 setState
   const shouldAutoScrollRef = useRef(true);
   const prevIsStreamingRef = useRef(false);
 
   // 滚动到底部
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((smooth = true) => {
+    if (viewportRef.current) {
+      viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
+      return;
+    }
     if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: "smooth" });
+      scrollRef.current.scrollIntoView({ behavior: smooth ? "smooth" : "instant" });
     }
   }, []);
 
@@ -91,7 +96,12 @@ function MessageListInner({
     prevIsStreamingRef.current = isStreaming;
 
     if (shouldAutoScrollRef.current) {
-      scrollToBottom();
+      if (!hasMountedRef.current) {
+        scrollToBottom(false);
+        hasMountedRef.current = true;
+      } else {
+        scrollToBottom(true);
+      }
     }
   }, [messages, streamContent, isStreaming, scrollToBottom]);
 
