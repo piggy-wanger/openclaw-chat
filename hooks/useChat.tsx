@@ -74,9 +74,8 @@ export function ChatProvider({
   const hasLoadedOnceRef = useRef(false);
 
   // 获取会话消息
-  const fetchMessages = useCallback(async () => {
+  const fetchMessages = useCallback(async (opts?: { preserveEmpty?: boolean }) => {
     if (!sessionId || !isConnected) {
-      setMessages([]);
       return;
     }
 
@@ -131,7 +130,10 @@ export function ChatProvider({
         }
       }
 
-      setMessages(formattedMessages);
+      // 如果历史为空且要求保留（如 final 后刷新），不清空现有消息
+      if (formattedMessages.length > 0 || !opts?.preserveEmpty) {
+        setMessages(formattedMessages);
+      }
       // After first successful load, mark that we've loaded once
       hasLoadedOnceRef.current = true;
       setIsInitialLoad(false);
@@ -258,8 +260,8 @@ export function ChatProvider({
           setIsStreaming(false);
           setStreamContent("");
           currentRunIdRef.current = null;
-          // 重新获取消息列表
-          fetchMessages();
+          // 重新获取消息列表（保留现有消息，如果历史为空不清空）
+          fetchMessages({ preserveEmpty: true });
           break;
 
         case "aborted":
