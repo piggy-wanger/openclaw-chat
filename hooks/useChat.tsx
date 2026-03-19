@@ -274,6 +274,7 @@ export function ChatProvider({
 
         case "final":
           // 流完成 - 保存流式内容为正式消息
+          console.log("[chat final] streamContent:", streamContentRef.current?.slice(0, 50), "event.message:", JSON.stringify(event.message)?.slice(0, 100));
           if (streamContentRef.current?.trim()) {
             const assistantMsg: Message = {
               id: `msg-final-${nanoid()}`,
@@ -343,6 +344,7 @@ export function ChatProvider({
       // agent.assistant 事件携带增量 delta（Gateway 不发 chat.delta）
       if (event.stream === "assistant" && event.data) {
         const delta = (event.data as Record<string, unknown>).delta;
+        console.log("[agent.assistant] delta:", JSON.stringify(delta)?.slice(0, 80));
         if (typeof delta === "string" && delta.trim() && !delta.startsWith("NO_REPLY")) {
           setIsStreaming(true);
           setStreamContent((prev) => {
