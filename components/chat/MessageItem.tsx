@@ -99,7 +99,11 @@ function MessageItemInner({ message, toolCalls }: MessageItemProps) {
             <ToolCallList toolCalls={toolCalls} />
           </div>
         )}
-        <p className="text-xs text-muted-foreground mt-1">{timestamp}</p>
+
+        {/* 只在有可见内容（文本气泡或实时工具调用）时显示时间 */}
+        {(hasTextContent || hasToolCalls) && (
+          <p className="text-xs text-muted-foreground mt-1">{timestamp}</p>
+        )}
       </div>
     </div>
   );
