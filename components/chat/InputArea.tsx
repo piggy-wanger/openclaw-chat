@@ -126,10 +126,6 @@ function InputAreaInner({ onSend, isStreaming, onAbort, disabled }: InputAreaPro
           )}
         </div>
 
-        {/* 提示文字 */}
-        <p className="text-xs text-muted-foreground text-center mt-2">
-          AI 可能会出错，请核实重要信息
-        </p>
       </div>
     </div>
   );

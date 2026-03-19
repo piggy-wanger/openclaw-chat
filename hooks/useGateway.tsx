@@ -125,7 +125,12 @@ export function GatewayProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // 不自动连接，用户需手动点击"测试连接"
+  // 自动连接 Gateway
+  useEffect(() => {
+    if (settings.gatewayUrl) {
+      connect();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 组件卸载时断开连接
   useEffect(() => {

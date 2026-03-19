@@ -108,7 +108,6 @@ export function ChatProvider({
     }
     setError(null);
 
-    console.log("[fetchMessages] Fetching history for sessionKey:", sessionId);
 
     try {
       const history = await client.chatHistory({
@@ -116,19 +115,19 @@ export function ChatProvider({
         limit: 100,
       });
 
-      console.log("[fetchMessages] History result:", history?.length ?? 0, "messages");
+      // history 返回 { messages: [...] }，需要取 .messages
+      const historyData = history as unknown as Record<string, unknown>;
+      const messagesArr = Array.isArray(historyData?.messages) ? historyData.messages : Array.isArray(history) ? history : [];
+
 
       // 检查 epoch 是否匹配，不匹配则丢弃结果（session 已切换）
       if (currentEpoch !== sessionEpochRef.current) {
-        console.log("[fetchMessages] Epoch mismatch, discarding result");
         return;
       }
 
       // 转换历史记录为 Message 格式
-      // history 是 unknown[]，需要根据实际格式解析
       const formattedMessages: Message[] = [];
-      if (Array.isArray(history)) {
-        for (const item of history) {
+      for (const item of messagesArr) {
           // 假设 history 项格式为 { role, content } 或 { role, message: { content } }
           if (typeof item === "object" && item !== null) {
             const msg = item as Record<string, unknown>;
@@ -143,7 +142,6 @@ export function ChatProvider({
             });
           }
         }
-      }
 
       // 如果历史为空，不清空现有消息（避免覆盖本地状态）
       if (formattedMessages.length > 0) {
@@ -242,8 +240,6 @@ export function ChatProvider({
   // 处理 chat 事件
   useEffect(() => {
     const handleChat = (event: ChatEvent) => {
-      console.log("[chat event]", event.state, "sessionKey:", event.sessionKey, "current:", sessionId, "match:", event.sessionKey === sessionId);
-
       // 检查是否是临时会话
       const isTempSession = sessionId?.startsWith("temp-");
 
@@ -268,7 +264,6 @@ export function ChatProvider({
 
         case "final":
           // 流完成 - 保存流式内容为正式消息
-          console.log("[chat final] streamContent:", streamContentRef.current?.slice(0, 50), "event.message:", JSON.stringify(event.message)?.slice(0, 100));
           if (streamContentRef.current?.trim()) {
             const assistantMsg: Message = {
               id: `msg-final-${nanoid()}`,
@@ -338,7 +333,6 @@ export function ChatProvider({
       // agent.assistant 事件携带增量 delta（Gateway 不发 chat.delta）
       if (event.stream === "assistant" && event.data) {
         const delta = (event.data as Record<string, unknown>).delta;
-        console.log("[agent.assistant] delta:", JSON.stringify(delta)?.slice(0, 80));
         if (typeof delta === "string" && delta.trim() && !delta.startsWith("NO_REPLY")) {
           setIsStreaming(true);
           setStreamContent((prev) => {
