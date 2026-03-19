@@ -11,20 +11,12 @@ import {
 } from "react";
 import { useGateway } from "./useGateway";
 import type { ChatEvent, AgentEvent } from "@/lib/gateway-types";
-import type { Message, ToolCall, ToolCallStatus } from "@/lib/types";
+import type { Message, ToolCall, ToolCallStatus, ContentBlock } from "@/lib/types";
+import { extractTextContent, parseContentBlocks } from "@/lib/contentBlocks";
 import { nanoid } from "nanoid";
 
-// Extract text from content (handles both string and array formats)
-function extractContent(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .filter((block) => block?.type === "text" && typeof block?.text === "string")
-      .map((block) => block.text)
-      .join("\n");
-  }
-  return JSON.stringify(content);
-}
+// Re-export extractTextContent as extractContent for backward compatibility
+const extractContent = extractTextContent;
 
 // Context 类型
 type ChatContextType = {
@@ -133,11 +125,16 @@ export function ChatProvider({
             const msg = item as Record<string, unknown>;
             // Handle both direct content and nested message.content
             const rawContent = msg.content ?? (msg.message as Record<string, unknown>)?.content;
+
+            // Check if content is in block array format
+            const blocks = parseContentBlocks(rawContent);
+            const messageContent: string | ContentBlock[] = blocks ?? extractContent(rawContent);
+
             formattedMessages.push({
               id: (msg.id as string) || `msg-${nanoid()}`,
               sessionId: sessionId,
               role: (msg.role as string) || "user",
-              content: extractContent(rawContent),
+              content: messageContent,
               createdAt: (msg.createdAt as number) || Date.now(),
             });
           }
@@ -276,20 +273,28 @@ export function ChatProvider({
           } else {
             // 没有流式内容，从 final message 提取
             const rawMessage = event.message;
-            const finalContent = rawMessage
-              ? extractContent(typeof rawMessage === "object" && rawMessage !== null && "content" in (rawMessage as Record<string, unknown>) ? (rawMessage as Record<string, unknown>).content : rawMessage)
-              : "";
-            if (finalContent) {
-              setMessagesWithCache((prev) => [
-                ...prev,
-                {
-                  id: `msg-final-${nanoid()}`,
-                  sessionId: sessionId || "",
-                  role: "assistant",
-                  content: finalContent,
-                  createdAt: Date.now(),
-                },
-              ]);
+            if (rawMessage) {
+              // Extract raw content from message
+              const rawContent = typeof rawMessage === "object" && rawMessage !== null && "content" in (rawMessage as Record<string, unknown>)
+                ? (rawMessage as Record<string, unknown>).content
+                : rawMessage;
+
+              // Check if content is in block array format
+              const blocks = parseContentBlocks(rawContent);
+              const finalContent: string | ContentBlock[] = blocks ?? extractContent(rawContent);
+
+              if (finalContent) {
+                setMessagesWithCache((prev) => [
+                  ...prev,
+                  {
+                    id: `msg-final-${nanoid()}`,
+                    sessionId: sessionId || "",
+                    role: "assistant",
+                    content: finalContent,
+                    createdAt: Date.now(),
+                  },
+                ]);
+              }
             }
           }
           streamContentRef.current = "";
