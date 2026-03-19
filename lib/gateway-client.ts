@@ -413,6 +413,7 @@ export class GatewayClient {
   }
 
   private handleEvent(message: EventMessage): void {
+    console.log("[Gateway event]", message.event, message.payload ? (message.payload as any).state : "", JSON.stringify(message.payload || {}).slice(0, 200));
     if (message.event === "chat") {
       this.emit("chat", message.payload as ChatEvent);
     } else if (message.event === "agent") {
