@@ -61,6 +61,10 @@ function sessionEntryToSession(entry: SessionEntry): Session {
 // 从 sessionKey 中提取显示名称（最后一段）
 export function extractSessionDisplayName(sessionKey: string): string {
   const parts = sessionKey.split(":");
+  // agent:<agentId>:<sessionName> → agentId:sessionName
+  if (parts.length > 2 && parts[0] === "agent") {
+    return parts.slice(1).join(":");
+  }
   return parts.length > 1 ? parts[parts.length - 1] : sessionKey;
 }
 
