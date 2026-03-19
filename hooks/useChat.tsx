@@ -262,16 +262,13 @@ export function ChatProvider({
 
       switch (event.state) {
         case "delta":
-          // 追加内容到流
+          // chat.delta 的 message 是完整累积文本对象，提取后 SET（不是 append）
           if (event.message) {
-            const content =
-              typeof event.message === "string"
-                ? event.message
-                : JSON.stringify(event.message);
-            setStreamContent((prev) => {
-              streamContentRef.current = prev + content;
-              return prev + content;
-            });
+            const text = extractContent(event.message);
+            if (typeof text === "string" && text.trim() && !text.startsWith("NO_REPLY")) {
+              setStreamContent(text);
+              streamContentRef.current = text;
+            }
           }
           break;
 
@@ -342,19 +339,6 @@ export function ChatProvider({
       // 只处理当前 run 的事件
       if (currentRunIdRef.current && event.runId !== currentRunIdRef.current)
         return;
-
-      // 处理流式助手回复
-      if (event.stream === "assistant" && event.data) {
-        const delta = (event.data as Record<string, unknown>).delta;
-        if (typeof delta === "string" && delta) {
-          setIsStreaming(true);
-          setStreamContent((prev) => {
-            streamContentRef.current = prev + delta;
-            return prev + delta;
-          });
-        }
-        return;
-      }
 
       if (event.stream === "tool" && event.data) {
         const { toolCallId, name, args, phase, result, isError } = event.data;
