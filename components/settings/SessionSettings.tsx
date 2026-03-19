@@ -137,8 +137,8 @@ export function SessionSettings({
       setActionLoading(sessionId);
       try {
         const { gateway } = await import("@/lib/gateway");
-        // Gateway 使用 sessionsReset 来清除会话
-        await gateway.sessionsReset(sessionId);
+        // 使用 sessions.delete 来删除会话
+        await gateway.sessionsDelete(sessionId);
         await fetchSessions();
         toast.success("会话已删除");
       } catch (err) {
@@ -174,7 +174,7 @@ export function SessionSettings({
         continue;
       }
       try {
-        await gateway.sessionsReset(session.id);
+        await gateway.sessionsDelete(session.id);
         successCount++;
       } catch {
         failCount++;

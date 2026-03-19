@@ -48,10 +48,31 @@ const SessionContext = createContext<SessionContextType | null>(null);
 
 // 将 SessionEntry 转换为 Session
 function sessionEntryToSession(entry: SessionEntry): Session {
+  // 解析 origin 字段
+  // origin 可能是字符串（如 "direct"）或对象（群组场景）
+  let type: Session["type"] = "direct";
+  let title = entry.title || extractSessionDisplayName(entry.key);
+
+  if (typeof entry.origin === "string") {
+    type = entry.origin as Session["type"];
+  } else if (entry.origin && typeof entry.origin === "object") {
+    // 群组场景：origin 是对象，包含 type 或 agentIds 字段
+    const originObj = entry.origin as Record<string, unknown>;
+    if (originObj.type === "group" || Array.isArray(originObj.agentIds)) {
+      type = "group";
+      // 使用 origin 中的 label 或 name 作为群组名称
+      if (originObj.label && typeof originObj.label === "string") {
+        title = entry.title || originObj.label;
+      } else if (originObj.name && typeof originObj.name === "string") {
+        title = entry.title || originObj.name;
+      }
+    }
+  }
+
   return {
     id: entry.key,
-    title: entry.title || extractSessionDisplayName(entry.key),
-    type: (typeof entry.origin === "string" ? entry.origin : undefined) || "direct",
+    title,
+    type,
     model: entry.model || "unknown",
     createdAt: entry.updatedAt || Date.now(),
     updatedAt: entry.updatedAt || Date.now(),
@@ -266,8 +287,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       setError(null);
       try {
-        // 调用 Gateway sessions.reset
-        await client.sessionsReset(id);
+        // 调用 Gateway sessions.delete
+        await client.sessionsDelete(id);
 
         // 从列表中移除
         setSessions((prev) => prev.filter((s) => s.id !== id));

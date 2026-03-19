@@ -248,29 +248,12 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     setShowDeleteDialog(true);
   }, []);
 
-  // 验证 ID 格式
-  const validateId = (id: string): boolean => {
-    return /^[a-zA-Z0-9_-]+$/.test(id);
-  };
-
   // 添加智能体
   const handleAddAgent = useCallback(async () => {
     if (!client) return;
 
-    const { id, name, emoji, model, workspace } = formData;
+    const { name, emoji, model, workspace } = formData;
 
-    if (!id.trim()) {
-      toast.error("请输入智能体 ID");
-      return;
-    }
-    if (!validateId(id)) {
-      toast.error("ID 只能包含字母、数字、下划线和连字符");
-      return;
-    }
-    if (agents.some((a) => a.id === id)) {
-      toast.error("智能体 ID 已存在");
-      return;
-    }
     if (!name.trim()) {
       toast.error("请输入智能体名称");
       return;
@@ -287,34 +270,14 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
 
     setSaving(true);
     try {
-      const { baseHash, config } = await client.configGet();
-      const currentConfig = config as {
-        agents?: {
-          list?: Agent[];
-          default?: string;
-        };
-      };
-
-      const newAgent: Agent = {
-        id,
-        identity: {
-          name,
-          emoji: emoji || undefined,
-          avatar: formData.avatar || undefined,
-        },
-        model,
-        workspace: workspace || undefined,
-      };
-
-      const patch = {
-        agents: {
-          list: [...agents, newAgent],
-          ...(currentConfig.agents?.default !== undefined && { default: currentConfig.agents.default }),
-        },
-      };
-
-      await client.configSet(baseHash, patch);
-      await client.configApply();
+      // 使用 agents.create RPC
+      await client.agentsCreate({
+        name: name.trim(),
+        model: model.trim(),
+        workspace: workspace.trim() || undefined,
+        emoji: emoji.trim() || undefined,
+        avatar: formData.avatar || undefined,
+      });
 
       toast.success("智能体添加成功");
       setShowAddDialog(false);
@@ -326,7 +289,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     } finally {
       setSaving(false);
     }
-  }, [client, formData, agents, loadAgents, resetForm]);
+  }, [client, formData, loadAgents, resetForm]);
 
   // 编辑智能体
   const handleEditAgent = useCallback(async () => {
@@ -350,40 +313,15 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
 
     setSaving(true);
     try {
-      const { baseHash, config } = await client.configGet();
-      const currentConfig = config as {
-        agents?: {
-          list?: Agent[];
-          default?: string;
-        };
-      };
-
-      const updatedAgents = agents.map((a) => {
-        if (a.id === editingAgent.id) {
-          return {
-            ...a,
-            identity: {
-              ...a.identity,
-              name,
-              emoji: emoji || undefined,
-              avatar: formData.avatar || undefined,
-            },
-            model,
-            workspace: workspace || undefined,
-          };
-        }
-        return a;
+      // 使用 agents.update RPC
+      await client.agentsUpdate({
+        id: editingAgent.id,
+        name: name.trim(),
+        model: model.trim(),
+        workspace: workspace.trim() || undefined,
+        emoji: emoji.trim() || undefined,
+        avatar: formData.avatar || undefined,
       });
-
-      const patch = {
-        agents: {
-          list: updatedAgents,
-          ...(currentConfig.agents?.default !== undefined && { default: currentConfig.agents.default }),
-        },
-      };
-
-      await client.configSet(baseHash, patch);
-      await client.configApply();
 
       toast.success("智能体更新成功");
       setShowEditDialog(false);
@@ -396,7 +334,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     } finally {
       setSaving(false);
     }
-  }, [client, editingAgent, formData, agents, loadAgents, resetForm]);
+  }, [client, editingAgent, formData, loadAgents, resetForm]);
 
   // 删除智能体
   const handleDeleteAgent = useCallback(async () => {
@@ -404,25 +342,8 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
 
     setSaving(true);
     try {
-      const { baseHash, config } = await client.configGet();
-      const currentConfig = config as {
-        agents?: {
-          list?: Agent[];
-          default?: string;
-        };
-      };
-
-      const updatedAgents = agents.filter((a) => a.id !== deletingAgent.id);
-
-      const patch = {
-        agents: {
-          list: updatedAgents,
-          ...(currentConfig.agents?.default !== undefined && { default: currentConfig.agents.default }),
-        },
-      };
-
-      await client.configSet(baseHash, patch);
-      await client.configApply();
+      // 使用 agents.delete RPC
+      await client.agentsDelete(deletingAgent.id);
 
       toast.success("智能体删除成功");
       setShowDeleteDialog(false);
@@ -434,7 +355,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     } finally {
       setSaving(false);
     }
-  }, [client, deletingAgent, agents, loadAgents]);
+  }, [client, deletingAgent, loadAgents]);
 
   // 未连接时显示提示
   if (!isConnected) {
@@ -588,23 +509,6 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
-                ID <span className="text-destructive">*</span>
-              </label>
-              <Input
-                value={formData.id}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, id: e.target.value }))
-                }
-                placeholder="my-agent"
-                className="bg-muted border-border text-foreground font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                唯一标识符，只能包含字母、数字、下划线和连字符
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
                 名称 <span className="text-destructive">*</span>
               </label>
               <Input
@@ -615,6 +519,9 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
                 placeholder="我的智能体"
                 className="bg-muted border-border text-foreground"
               />
+              <p className="text-xs text-muted-foreground">
+                智能体 ID 将根据名称自动生成
+              </p>
             </div>
 
             {/* 头像上传 */}
@@ -759,7 +666,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, workspace: e.target.value }))
                 }
-                placeholder={formData.id ? `~/.openclaw/workspace-${formData.id}` : "~/.openclaw/workspace-<agentId>"}
+                placeholder="~/.openclaw/workspace-{agentId}"
                 className="bg-muted border-border text-foreground font-mono text-sm"
               />
               <p className="text-xs text-muted-foreground">
