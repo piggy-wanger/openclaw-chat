@@ -351,11 +351,7 @@ function ChatArea({
               )}
 
               {/* 消息列表 */}
-              {messageLoading && isInitialLoad ? (
-                <div className="flex-1 flex items-center justify-center">
-                  <MessageListSkeleton />
-                </div>
-              ) : messages.length === 0 && !isStreaming && !messageLoading ? (
+              {messages.length === 0 && !isStreaming && !messageLoading && !isSessionSwitching ? (
                 <NoMessagesState />
               ) : (
                 <div className="flex-1 overflow-hidden">
@@ -370,12 +366,14 @@ function ChatArea({
                 </div>
               )}
 
-              {/* 会话切换遮罩 - 覆盖在消息区上方，防止闪回 */}
-              {isSessionSwitching && (
+              {/* 加载遮罩 - 初始加载 + 会话切换时覆盖在消息区上方 */}
+              {(isSessionSwitching || (messageLoading && isInitialLoad)) && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
                   <div className="flex flex-col items-center gap-3">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">加载中...</span>
+                    <span className="text-sm text-muted-foreground">
+                      {isSessionSwitching ? "加载中..." : "连接中..."}
+                    </span>
                   </div>
                 </div>
               )}
@@ -389,8 +387,11 @@ function ChatArea({
               />
             </>
           ) : sessionLoading ? (
-            <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">加载会话...</span>
+              </div>
             </div>
           ) : (
             <NoSessionState />
