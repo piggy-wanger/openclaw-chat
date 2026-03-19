@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import type { GatewayStatus } from "@/hooks/useGateway";
 
-const APP_VERSION = "0.2.0";
+const APP_VERSION = "0.3.0";
 
 // 连接状态指示器组件
 function ConnectionStatusIndicator({ status }: { status: GatewayStatus }) {
