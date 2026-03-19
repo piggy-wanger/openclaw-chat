@@ -431,6 +431,8 @@ export function ChatProvider({
     setToolCalls([]);
     setError(null);
     currentRunIdRef.current = null;
+    // 立即标记为切换中，防止 messages 为空时闪 NoMessagesState
+    setIsSessionSwitching(true);
 
     // 从缓存恢复消息，或清空（新会话）
     const cached = sessionId ? messagesCacheRef.current.get(sessionId) : null;
