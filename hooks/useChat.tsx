@@ -66,7 +66,7 @@ export function ChatProvider({
 
   // 包装 setMessages，同步到缓存
   const setMessagesWithCache = useCallback((updater: Message[] | ((prev: Message[]) => Message[])) => {
-    setMessagesWithCache((prev) => {
+    setMessages((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
       if (sessionId) {
         messagesCacheRef.current.set(sessionId, next);
