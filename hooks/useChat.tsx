@@ -64,6 +64,17 @@ export function ChatProvider({
   const [error, setError] = useState<string | null>(null);
   const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
 
+  // 包装 setMessages，同步到缓存
+  const setMessagesWithCache = useCallback((updater: Message[] | ((prev: Message[]) => Message[])) => {
+    setMessagesWithCache((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (sessionId) {
+        messagesCacheRef.current.set(sessionId, next);
+      }
+      return next;
+    });
+  }, [sessionId]);
+
   // 当前运行的 runId
   const currentRunIdRef = useRef<string | null>(null);
   const streamContentRef = useRef("");
@@ -73,6 +84,9 @@ export function ChatProvider({
 
   // Track if this is the first fetch (for skeleton vs loading indicator)
   const hasLoadedOnceRef = useRef(false);
+
+  // 本地消息缓存：sessionId → Message[]
+  const messagesCacheRef = useRef<Map<string, Message[]>>(new Map());
 
   // 获取会话消息
   const fetchMessages = useCallback(async (opts?: { preserveEmpty?: boolean }) => {
@@ -133,7 +147,7 @@ export function ChatProvider({
 
       // 如果历史为空，不清空现有消息（避免覆盖本地状态）
       if (formattedMessages.length > 0) {
-        setMessages(formattedMessages);
+        setMessagesWithCache(formattedMessages);
       }
       // After first successful load, mark that we've loaded once
       hasLoadedOnceRef.current = true;
@@ -174,7 +188,7 @@ export function ChatProvider({
         createdAt: Date.now(),
       };
 
-      setMessages((prev) => [...prev, tempUserMessage]);
+      setMessagesWithCache((prev) => [...prev, tempUserMessage]);
       setStreamContent("");
       setToolCalls([]);
       setIsStreaming(true);
@@ -196,7 +210,7 @@ export function ChatProvider({
         setError(message);
         console.error("Error sending message:", err);
         // 移除乐观添加的用户消息
-        setMessages((prev) => prev.filter((m) => m.id !== tempUserMessage.id));
+        setMessagesWithCache((prev) => prev.filter((m) => m.id !== tempUserMessage.id));
         setIsStreaming(false);
       }
     },
@@ -271,7 +285,7 @@ export function ChatProvider({
               content: streamContentRef.current,
               createdAt: Date.now(),
             };
-            setMessages((prev) => [...prev, assistantMsg]);
+            setMessagesWithCache((prev) => [...prev, assistantMsg]);
           } else {
             // 没有流式内容，从 final message 提取
             const rawMessage = event.message;
@@ -279,7 +293,7 @@ export function ChatProvider({
               ? extractContent(typeof rawMessage === "object" && rawMessage !== null && "content" in (rawMessage as Record<string, unknown>) ? (rawMessage as Record<string, unknown>).content : rawMessage)
               : "";
             if (finalContent) {
-              setMessages((prev) => [
+              setMessagesWithCache((prev) => [
                 ...prev,
                 {
                   id: `msg-final-${nanoid()}`,
@@ -431,9 +445,11 @@ export function ChatProvider({
     setError(null);
     currentRunIdRef.current = null;
 
-    // 不清空消息，让旧消息保持可见直到新消息加载完成，避免闪烁
+    // 从缓存恢复消息，或清空（新会话）
+    const cached = sessionId ? messagesCacheRef.current.get(sessionId) : null;
+    setMessagesWithCache(cached ?? []);
 
-    // 获取新会话的消息
+    // 获取新会话的消息（Gateway 历史作为补充，不清空缓存）
     fetchMessages();
   }, [sessionId, fetchMessages, abortStream]);
 
