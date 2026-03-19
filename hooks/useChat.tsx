@@ -66,6 +66,7 @@ export function ChatProvider({
 
   // 当前运行的 runId
   const currentRunIdRef = useRef<string | null>(null);
+  const streamContentRef = useRef("");
 
   // Session epoch 用于防止竞态条件
   const sessionEpochRef = useRef(0);
@@ -251,16 +252,32 @@ export function ChatProvider({
               typeof event.message === "string"
                 ? event.message
                 : JSON.stringify(event.message);
-            setStreamContent((prev) => prev + content);
+            setStreamContent((prev) => {
+              streamContentRef.current = prev + content;
+              return prev + content;
+            });
           }
           break;
 
         case "final":
-          // 流完成
-          setIsStreaming(false);
+          // 流完成 - 先将流式内容保存为消息
+          const savedContent = streamContentRef.current;
+          if (savedContent?.trim()) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `msg-final-${nanoid()}`,
+                sessionId: sessionId || "",
+                role: "assistant",
+                content: savedContent,
+                createdAt: Date.now(),
+              },
+            ]);
+          }
           setStreamContent("");
+          setIsStreaming(false);
           currentRunIdRef.current = null;
-          // 重新获取消息列表（保留现有消息，如果历史为空不清空）
+          // 尝试从历史刷新（保留现有消息，如果历史为空不清空）
           fetchMessages({ preserveEmpty: true });
           break;
 
