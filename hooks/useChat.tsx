@@ -122,9 +122,13 @@ export function ChatProvider({
       // 转换历史记录为 Message 格式
       const formattedMessages: Message[] = [];
       for (const item of messagesArr) {
-          // 假设 history 项格式为 { role, content } 或 { role, message: { content } }
+          // 只保留 user 和 assistant 消息，过滤掉 tool/tool_result/system 等中间过程
           if (typeof item === "object" && item !== null) {
             const msg = item as Record<string, unknown>;
+            const role = (msg.role as string)?.toLowerCase();
+            if (role === "tool" || role === "tool_result" || role === "toolresult" || role === "function") {
+              continue;
+            }
             // Handle both direct content and nested message.content
             const rawContent = msg.content ?? (msg.message as Record<string, unknown>)?.content;
 
