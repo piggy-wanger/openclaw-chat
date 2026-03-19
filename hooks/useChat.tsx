@@ -120,35 +120,59 @@ export function ChatProvider({
         return;
       }
 
-      // 转换历史记录为 Message 格式
+      // 转换历史记录为 Message 格式，提取 tool 调用附加到 assistant 消息
       const formattedMessages: Message[] = [];
+      let pendingToolCalls: ToolCall[] = [];
+
       for (const item of messagesArr) {
-          // 只保留 user 和 assistant 消息，过滤掉 tool/tool_result/system 等中间过程
-          if (typeof item === "object" && item !== null) {
-            const msg = item as Record<string, unknown>;
-            const role = (msg.role as string)?.toLowerCase();
-            if (role === "tool" || role === "tool_result" || role === "toolresult" || role === "function") {
-              continue;
-            }
-            // Handle both direct content and nested message.content
-            const rawContent = msg.content ?? (msg.message as Record<string, unknown>)?.content;
+          if (typeof item !== "object" || item === null) continue;
+          const msg = item as Record<string, unknown>;
+          const role = (msg.role as string)?.toLowerCase();
 
-            // Check if content is in block array format
-            const blocks = parseContentBlocks(rawContent);
-            const messageContent: string | ContentBlock[] = blocks ?? extractContent(rawContent);
-
-            formattedMessages.push({
-              id: (msg.id as string) || `msg-${nanoid()}`,
-              sessionId: sessionId,
-              role: (msg.role as string) || "user",
-              content: messageContent,
-              createdAt: (msg.createdAt as number) || Date.now(),
+          if (role === "tool" || role === "tool_result" || role === "toolresult" || role === "function") {
+            // 提取 tool 调用信息
+            const toolName = msg.name ?? (msg.function as Record<string, unknown>)?.name ?? "tool";
+            const toolId = msg.tool_call_id ?? msg.id ?? `tool-${nanoid()}`;
+            const toolResult = typeof msg.content === "string" ? msg.content : msg.result ?? JSON.stringify(msg.content ?? msg.result ?? "");
+            const isError = msg.is_error === true || role === "toolresult";
+            pendingToolCalls.push({
+              id: toolId as string,
+              name: toolName as string,
+              arguments: {},
+              status: isError ? "error" : "success",
+              result: toolResult as string,
+              startedAt: (msg.createdAt as number) || Date.now(),
+              completedAt: Date.now(),
             });
+            continue;
           }
-        }
+
+          const rawContent = msg.content ?? (msg.message as Record<string, unknown>)?.content;
+          let parsedContent: unknown = rawContent;
+          if (typeof rawContent === "string" && rawContent.trim().startsWith("[")) {
+            try { parsedContent = JSON.parse(rawContent); } catch { /* keep as string */ }
+          }
+          const blocks = parseContentBlocks(parsedContent);
+          const messageContent: string | ContentBlock[] = blocks ?? extractContent(parsedContent);
+
+          const message: Message = {
+            id: (msg.id as string) || `msg-${nanoid()}`,
+            sessionId: sessionId,
+            role: (msg.role as string) || "user",
+            content: messageContent,
+            createdAt: (msg.createdAt as number) || Date.now(),
+          };
+
+          // assistant 消息：附加上一条累积的 tool 调用
+          if (role === "assistant" && pendingToolCalls.length > 0) {
+            (message as Record<string, unknown>).toolCalls = [...pendingToolCalls];
+            pendingToolCalls = [];
+          }
+
+          formattedMessages.push(message);
+      }
 
       // 如果本地缓存已有消息，优先使用缓存（保留 toolCalls 等额外信息）
-      // Gateway 历史消息会丢失 toolCalls 信息
       const cached = sessionId ? messagesCacheRef.current.get(sessionId) : null;
       if (cached && cached.length > 0) {
         setMessagesWithCache(cached);
