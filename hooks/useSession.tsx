@@ -51,7 +51,7 @@ function sessionEntryToSession(entry: SessionEntry): Session {
   return {
     id: entry.key,
     title: entry.title || extractSessionDisplayName(entry.key),
-    type: entry.origin || "direct",
+    type: (typeof entry.origin === "string" ? entry.origin : undefined) || "direct",
     model: entry.model || "unknown",
     createdAt: entry.updatedAt || Date.now(),
     updatedAt: entry.updatedAt || Date.now(),
