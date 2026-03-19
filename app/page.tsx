@@ -356,22 +356,11 @@ function ChatArea({
                 <div className="flex-1 flex items-center justify-center">
                   <MessageListSkeleton />
                 </div>
-              ) : isSessionSwitching ? (
+              ) : isSessionSwitching || (currentSession && !messageLoading && messages.length === 0 && !isStreaming) ? (
                 <>
-                  {/* Show subtle loading indicator at top when switching sessions */}
-                  <div className="flex items-center justify-center py-2 border-b border-border bg-muted/30">
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mr-2" />
-                    <span className="text-sm text-muted-foreground">加载中...</span>
-                  </div>
-                  <div className="flex-1 overflow-hidden">
-                    <MessageList
-                      messages={messages}
-                      isStreaming={isStreaming}
-                      streamContent={streamContent}
-                      loading={messageLoading}
-                      isInitialLoad={isInitialLoad}
-                      toolCalls={toolCalls}
-                    />
+                  {/* Show loading when switching sessions or messages haven't loaded yet */}
+                  <div className="flex-1 flex items-center justify-center">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                   </div>
                 </>
               ) : messages.length === 0 && !isStreaming ? (
