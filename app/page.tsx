@@ -330,7 +330,7 @@ function ChatArea({
         />
 
         {/* Message List Area */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-background">
+        <div className="flex-1 flex flex-col overflow-hidden bg-background relative">
           {currentSession ? (
             <>
               {/* 错误状态 */}
@@ -351,19 +351,11 @@ function ChatArea({
               )}
 
               {/* 消息列表 */}
-              {/* Show skeleton on initial load (first session ever), show loading bar on session switch */}
               {messageLoading && isInitialLoad ? (
                 <div className="flex-1 flex items-center justify-center">
                   <MessageListSkeleton />
                 </div>
-              ) : isSessionSwitching || (currentSession && !messageLoading && messages.length === 0 && !isStreaming) ? (
-                <>
-                  {/* Show loading when switching sessions or messages haven't loaded yet */}
-                  <div className="flex-1 flex items-center justify-center">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  </div>
-                </>
-              ) : messages.length === 0 && !isStreaming ? (
+              ) : messages.length === 0 && !isStreaming && !messageLoading ? (
                 <NoMessagesState />
               ) : (
                 <div className="flex-1 overflow-hidden">
@@ -375,6 +367,16 @@ function ChatArea({
                     isInitialLoad={isInitialLoad}
                     toolCalls={toolCalls}
                   />
+                </div>
+              )}
+
+              {/* 会话切换遮罩 - 覆盖在消息区上方，防止闪回 */}
+              {isSessionSwitching && (
+                <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">加载中...</span>
+                  </div>
                 </div>
               )}
 
