@@ -50,7 +50,7 @@ const SessionContext = createContext<SessionContextType | null>(null);
 function sessionEntryToSession(entry: SessionEntry): Session {
   return {
     id: entry.key,
-    title: entry.title || "New Chat",
+    title: entry.title || extractSessionDisplayName(entry.key),
     type: entry.origin || "direct",
     model: entry.model || "unknown",
     createdAt: entry.updatedAt || Date.now(),
