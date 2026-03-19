@@ -95,7 +95,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         limit: 100,
         includeDerivedTitles: true,
       });
-      console.log("[fetchSessions] Gateway returned", entries.length, "sessions:", entries.map(e => ({ key: e.key, title: e.title, origin: e.origin, kind: e.kind })));
+      console.log("[fetchSessions] Gateway returned", entries.length, "sessions:", entries.map(e => ({ key: e.key, title: e.title, origin: e.origin })));
       // 转换为 Session 类型并按 updatedAt 降序排列
       const sessionList = entries
         .filter(e => e.origin != null)

@@ -353,7 +353,9 @@ function ChatArea({
               {/* 消息列表 */}
               {/* Show skeleton on initial load (first session ever), show loading bar on session switch */}
               {messageLoading && isInitialLoad ? (
-                <MessageListSkeleton />
+                <div className="flex-1 flex items-center justify-center">
+                  <MessageListSkeleton />
+                </div>
               ) : isSessionSwitching ? (
                 <>
                   {/* Show subtle loading indicator at top when switching sessions */}
@@ -361,6 +363,21 @@ function ChatArea({
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mr-2" />
                     <span className="text-sm text-muted-foreground">加载中...</span>
                   </div>
+                  <div className="flex-1 overflow-hidden">
+                    <MessageList
+                      messages={messages}
+                      isStreaming={isStreaming}
+                      streamContent={streamContent}
+                      loading={messageLoading}
+                      isInitialLoad={isInitialLoad}
+                      toolCalls={toolCalls}
+                    />
+                  </div>
+                </>
+              ) : messages.length === 0 && !isStreaming ? (
+                <NoMessagesState />
+              ) : (
+                <div className="flex-1 overflow-hidden">
                   <MessageList
                     messages={messages}
                     isStreaming={isStreaming}
@@ -369,18 +386,7 @@ function ChatArea({
                     isInitialLoad={isInitialLoad}
                     toolCalls={toolCalls}
                   />
-                </>
-              ) : messages.length === 0 && !isStreaming ? (
-                <NoMessagesState />
-              ) : (
-                <MessageList
-                  messages={messages}
-                  isStreaming={isStreaming}
-                  streamContent={streamContent}
-                  loading={messageLoading}
-                  isInitialLoad={isInitialLoad}
-                  toolCalls={toolCalls}
-                />
+                </div>
               )}
 
               {/* 输入区域 */}
