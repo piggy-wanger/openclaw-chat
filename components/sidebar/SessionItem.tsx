@@ -75,8 +75,8 @@ export function SessionItem({
         className={cn(
           "group flex items-center gap-2 rounded-lg px-3 py-2 cursor-pointer transition-colors w-full text-left",
           isActive
-            ? "bg-zinc-800 text-white"
-            : "hover:bg-zinc-800/50 text-zinc-300"
+            ? "bg-muted text-foreground"
+            : "hover:bg-muted/50 text-foreground"
         )}
         onClick={onSelect}
         onKeyDown={(e) => {
@@ -88,7 +88,7 @@ export function SessionItem({
       >
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium truncate">{session.title}</div>
-          <div className="text-xs text-zinc-500">{relativeTime}</div>
+          <div className="text-xs text-muted-foreground">{relativeTime}</div>
         </div>
         <div
           className={cn(
@@ -98,8 +98,8 @@ export function SessionItem({
           onClick={(e) => e.stopPropagation()}
         >
           <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-            <DropdownMenuTrigger aria-label="会话操作" className="flex items-center justify-center h-6 w-6 rounded-md hover:bg-zinc-700 transition-colors">
-              <MoreVertical className="h-4 w-4 text-zinc-400" />
+            <DropdownMenuTrigger aria-label="会话操作" className="flex items-center justify-center h-6 w-6 rounded-md hover:bg-muted transition-colors">
+              <MoreVertical className="h-4 w-4 text-muted-foreground" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={handleOpenRename}>

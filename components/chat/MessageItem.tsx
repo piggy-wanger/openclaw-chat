@@ -26,9 +26,9 @@ function MessageItemInner({ message, toolCalls }: MessageItemProps) {
     // 系统消息：居中，灰色小字
     return (
       <div className="flex justify-center my-4">
-        <div className="text-zinc-500 text-xs text-center px-4 py-2 bg-zinc-800/50 rounded-lg max-w-md">
+        <div className="text-muted-foreground text-xs text-center px-4 py-2 bg-muted/50 rounded-lg max-w-md">
           {content}
-          <span className="block mt-1 text-zinc-600">{timestamp}</span>
+          <span className="block mt-1 text-muted-foreground">{timestamp}</span>
         </div>
       </div>
     );
@@ -42,7 +42,7 @@ function MessageItemInner({ message, toolCalls }: MessageItemProps) {
           <div className="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-2.5">
             <p className="whitespace-pre-wrap break-words">{content}</p>
           </div>
-          <p className="text-xs text-zinc-500 mt-1 text-right">{timestamp}</p>
+          <p className="text-xs text-muted-foreground mt-1 text-right">{timestamp}</p>
         </div>
       </div>
     );
@@ -54,7 +54,7 @@ function MessageItemInner({ message, toolCalls }: MessageItemProps) {
   return (
     <div className="flex justify-start mb-4">
       <div className="max-w-[80%] md:max-w-[70%]">
-        <div className="bg-zinc-800 text-zinc-100 rounded-2xl rounded-tl-sm px-4 py-2.5">
+        <div className="bg-muted text-foreground rounded-2xl rounded-tl-sm px-4 py-2.5">
           <MarkdownRenderer content={content} />
         </div>
         {hasToolCalls && (
@@ -62,7 +62,7 @@ function MessageItemInner({ message, toolCalls }: MessageItemProps) {
             <ToolCallList toolCalls={toolCalls} />
           </div>
         )}
-        <p className="text-xs text-zinc-500 mt-1">{timestamp}</p>
+        <p className="text-xs text-muted-foreground mt-1">{timestamp}</p>
       </div>
     </div>
   );

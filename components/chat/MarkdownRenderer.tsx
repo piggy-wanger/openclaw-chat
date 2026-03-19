@@ -40,13 +40,13 @@ function CopyButton({ getCode }: { getCode: () => string }) {
   return (
     <button
       onClick={handleCopy}
-      className="absolute top-2 right-2 p-1.5 rounded-md bg-zinc-700 hover:bg-zinc-600 transition-colors"
+      className="absolute top-2 right-2 p-1.5 rounded-md bg-muted hover:bg-muted/80 transition-colors"
       aria-label={copied ? "已复制" : "复制代码"}
     >
       {copied ? (
         <Check className="h-3.5 w-3.5 text-green-400" />
       ) : (
-        <Copy className="h-3.5 w-3.5 text-zinc-300" />
+        <Copy className="h-3.5 w-3.5 text-foreground" />
       )}
     </button>
   );
@@ -76,7 +76,7 @@ function CodeBlock({
     if (!childText.includes("\n")) {
       return (
         <code
-          className="px-1.5 py-0.5 rounded bg-zinc-700/50 text-zinc-200 text-sm font-mono"
+          className="px-1.5 py-0.5 rounded bg-muted/50 text-foreground text-sm font-mono"
           {...props}
         >
           {children}
@@ -89,14 +89,14 @@ function CodeBlock({
   return (
     <div className="relative group my-3">
       {language && (
-        <div className="absolute top-0 left-0 px-3 py-1 text-xs text-zinc-400 bg-zinc-800 rounded-t-lg border-b border-zinc-700 font-mono">
+        <div className="absolute top-0 left-0 px-3 py-1 text-xs text-muted-foreground bg-muted rounded-t-lg border-b border-border font-mono">
           {language}
         </div>
       )}
       <pre
         ref={preRef}
         className={cn(
-          "overflow-x-auto rounded-lg bg-zinc-900 p-4 text-sm",
+          "overflow-x-auto rounded-lg bg-card p-4 text-sm",
           language && "pt-8"
         )}
       >
@@ -133,7 +133,7 @@ function Table({ children, ...props }: React.HTMLAttributes<HTMLTableElement>) {
   return (
     <div className="overflow-x-auto my-3">
       <table
-        className="min-w-full border-collapse border border-zinc-700 text-sm"
+        className="min-w-full border-collapse border border-border text-sm"
         {...props}
       >
         {children}
@@ -145,7 +145,7 @@ function Table({ children, ...props }: React.HTMLAttributes<HTMLTableElement>) {
 function Th({ children, ...props }: React.HTMLAttributes<HTMLTableCellElement>) {
   return (
     <th
-      className="border border-zinc-700 px-3 py-2 bg-zinc-800 text-left font-medium"
+      className="border border-border px-3 py-2 bg-muted text-left font-medium"
       {...props}
     >
       {children}
@@ -155,7 +155,7 @@ function Th({ children, ...props }: React.HTMLAttributes<HTMLTableCellElement>) 
 
 function Td({ children, ...props }: React.HTMLAttributes<HTMLTableCellElement>) {
   return (
-    <td className="border border-zinc-700 px-3 py-2" {...props}>
+    <td className="border border-border px-3 py-2" {...props}>
       {children}
     </td>
   );
@@ -195,12 +195,12 @@ function MarkdownRendererInner({ content, className }: MarkdownRendererProps) {
           ),
           // 引用样式
           blockquote: ({ children }) => (
-            <blockquote className="border-l-4 border-zinc-600 pl-4 my-3 text-zinc-400 italic">
+            <blockquote className="border-l-4 border-border pl-4 my-3 text-muted-foreground italic">
               {children}
             </blockquote>
           ),
           // 水平线
-          hr: () => <hr className="my-4 border-zinc-700" />,
+          hr: () => <hr className="my-4 border-border" />,
         }}
       >
         {content}

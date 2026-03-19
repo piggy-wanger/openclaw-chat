@@ -27,22 +27,22 @@ export default function SettingsPage() {
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>("connection");
 
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <Link href="/" aria-label="返回主页">
-            <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-white">
+            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
               <ChevronLeft className="h-5 w-5" />
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold text-white">设置</h1>
+          <h1 className="text-2xl font-bold text-foreground">设置</h1>
         </div>
 
         {/* Body */}
         <SessionProvider>
           {/* Mobile Nav: horizontal tabs */}
-          <div className="flex md:hidden border-b border-zinc-800 overflow-x-auto mb-6 -mx-4 px-4">
+          <div className="flex md:hidden border-b border-border overflow-x-auto mb-6 -mx-4 px-4">
             {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
@@ -50,8 +50,8 @@ export default function SettingsPage() {
                 className={cn(
                   "flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors",
                   activeCategory === key
-                    ? "text-white border-blue-500"
-                    : "text-zinc-400 border-transparent hover:text-zinc-200"
+                    ? "text-foreground border-primary"
+                    : "text-muted-foreground border-transparent hover:text-foreground"
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
@@ -61,9 +61,9 @@ export default function SettingsPage() {
           </div>
 
           {/* Main Card */}
-          <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden flex" style={{ height: "calc(100vh - 12rem)" }}>
+          <div className="bg-card rounded-xl border border-border overflow-hidden flex" style={{ height: "calc(100vh - 12rem)" }}>
             {/* Sidebar Navigation (desktop) */}
-            <nav className="hidden md:flex flex-col w-[180px] min-w-[180px] border-r border-zinc-800 py-2">
+            <nav className="hidden md:flex flex-col w-[180px] min-w-[180px] border-r border-border py-2">
               {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
@@ -71,8 +71,8 @@ export default function SettingsPage() {
                   className={cn(
                     "flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors text-left",
                     activeCategory === key
-                      ? "text-white bg-zinc-800/80 border-r-2 border-blue-500"
-                      : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                      ? "text-foreground bg-muted/80 border-r-2 border-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   )}
                 >
                   <Icon className="h-4 w-4 shrink-0" />

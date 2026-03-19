@@ -39,7 +39,7 @@ function ConnectionStatusIndicator({ status }: { status: GatewayStatus }) {
     );
   }
   return (
-    <div className="flex items-center gap-2 text-zinc-500">
+    <div className="flex items-center gap-2 text-muted-foreground">
       <Circle className="h-4 w-4" />
       <span className="text-sm">未连接</span>
     </div>
@@ -104,43 +104,43 @@ export function ConnectionSettings({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-white mb-1">连接设置</h2>
-        <p className="text-sm text-zinc-500">配置 OpenClaw Gateway 连接</p>
+        <h2 className="text-lg font-semibold text-foreground mb-1">连接设置</h2>
+        <p className="text-sm text-muted-foreground">配置 OpenClaw Gateway 连接</p>
       </div>
 
       {/* 连接状态 */}
-      <div className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg border border-zinc-800">
-        <span className="text-sm text-zinc-400">连接状态</span>
+      <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
+        <span className="text-sm text-muted-foreground">连接状态</span>
         <ConnectionStatusIndicator status={status} />
       </div>
 
       {/* Gateway URL */}
       <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-300">Gateway URL</label>
+        <label className="text-sm font-medium text-foreground">Gateway URL</label>
         <Input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onBlur={handleUrlBlur}
           placeholder="ws://127.0.0.1:18789"
-          className="bg-zinc-800 border-zinc-700 text-zinc-300"
+          className="bg-muted border-border text-foreground"
         />
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-muted-foreground">
           OpenClaw Gateway 的 WebSocket 地址
         </p>
       </div>
 
       {/* Token */}
       <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-300">Token</label>
+        <label className="text-sm font-medium text-foreground">Token</label>
         <Input
           type="password"
           value={token}
           onChange={(e) => setToken(e.target.value)}
           onBlur={handleTokenBlur}
           placeholder="可选的认证 Token"
-          className="bg-zinc-800 border-zinc-700 text-zinc-300"
+          className="bg-muted border-border text-foreground"
         />
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-muted-foreground">
           如果 Gateway 配置了认证，请输入 Token
         </p>
       </div>
@@ -150,7 +150,7 @@ export function ConnectionSettings({
         onClick={handleTestConnection}
         disabled={testing}
         variant="outline"
-        className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+        className="border-border text-foreground hover:bg-muted"
       >
         {testing ? (
           <>

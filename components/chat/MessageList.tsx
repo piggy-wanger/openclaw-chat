@@ -19,7 +19,7 @@ type MessageListProps = {
 // 流式内容光标动画组件
 function StreamingCursor() {
   return (
-    <span className="inline-block w-2 h-4 bg-zinc-300 animate-pulse ml-0.5" />
+    <span className="inline-block w-2 h-4 bg-foreground animate-pulse ml-0.5" />
   );
 }
 
@@ -34,7 +34,7 @@ function MessageListSkeleton() {
         >
           <div
             className={`h-16 rounded-2xl animate-pulse ${
-              i % 2 === 0 ? "bg-zinc-800 w-[60%]" : "bg-blue-900/30 w-[40%]"
+              i % 2 === 0 ? "bg-muted w-[60%]" : "bg-blue-900/30 w-[40%]"
             }`}
             style={{ animationDelay: `${i * 150}ms` }}
           />
@@ -117,7 +117,7 @@ function MessageListInner({
         {isStreaming && streamContent && (
           <div className="flex justify-start mb-4">
             <div className="max-w-[80%] md:max-w-[70%]">
-              <div className="bg-zinc-800 text-zinc-100 rounded-2xl rounded-tl-sm px-4 py-2.5">
+              <div className="bg-muted text-foreground rounded-2xl rounded-tl-sm px-4 py-2.5">
                 <MarkdownRenderer content={streamContent} />
                 <StreamingCursor />
               </div>
@@ -135,8 +135,8 @@ function MessageListInner({
         {isStreaming && !streamContent && (
           <div className="flex justify-start mb-4">
             <div className="max-w-[80%] md:max-w-[70%]">
-              <div className="bg-zinc-800 rounded-2xl rounded-tl-sm px-4 py-3">
-                <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+              <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-3">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
               {/* 流式期间显示工具调用（即使没有文字内容） */}
               {toolCalls.length > 0 && (

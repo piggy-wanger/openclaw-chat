@@ -102,10 +102,10 @@ export function SettingsForm({ activeCategory }: { activeCategory: SettingsCateg
   if (loading) {
     return (
       <div className="p-6 space-y-6">
-        <div className="h-8 bg-zinc-800 animate-pulse rounded w-32" />
-        <div className="h-10 bg-zinc-800 animate-pulse rounded" />
-        <div className="h-10 bg-zinc-800 animate-pulse rounded" />
-        <div className="h-10 bg-zinc-800 animate-pulse rounded" />
+        <div className="h-8 bg-muted animate-pulse rounded w-32" />
+        <div className="h-10 bg-muted animate-pulse rounded" />
+        <div className="h-10 bg-muted animate-pulse rounded" />
+        <div className="h-10 bg-muted animate-pulse rounded" />
       </div>
     );
   }

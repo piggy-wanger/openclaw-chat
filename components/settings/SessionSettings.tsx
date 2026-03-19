@@ -93,12 +93,12 @@ export function SessionSettings({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-white mb-1">会话管理</h2>
-        <p className="text-sm text-zinc-500">管理您的聊天会话</p>
+        <h2 className="text-lg font-semibold text-foreground mb-1">会话管理</h2>
+        <p className="text-sm text-muted-foreground">管理您的聊天会话</p>
       </div>
 
       {/* 会话数量 */}
-      <div className="flex items-center gap-2 text-zinc-400 p-4 bg-zinc-800/50 rounded-lg border border-zinc-800">
+      <div className="flex items-center gap-2 text-muted-foreground p-4 bg-muted/50 rounded-lg border border-border">
         <Info className="h-4 w-4" />
         <span className="text-sm">当前会话数量: {sessions.length}</span>
       </div>
@@ -109,7 +109,7 @@ export function SessionSettings({
           onClick={() => setShowClearConfirm(true)}
           disabled={sessions.length === 0}
           variant="outline"
-          className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-red-400"
+          className="border-border text-foreground hover:bg-muted hover:text-red-400"
         >
           <Trash2 className="h-4 w-4 mr-2" />
           清除所有会话
@@ -119,7 +119,7 @@ export function SessionSettings({
           onClick={handleExportSessions}
           disabled={sessions.length === 0}
           variant="outline"
-          className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+          className="border-border text-foreground hover:bg-muted"
         >
           <Download className="h-4 w-4 mr-2" />
           导出会话
@@ -128,10 +128,10 @@ export function SessionSettings({
 
       {/* 清除会话确认对话框 */}
       <Dialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
-        <DialogContent className="bg-zinc-900 border-zinc-800">
+        <DialogContent className="bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="text-white">确认清除所有会话</DialogTitle>
-            <DialogDescription className="text-zinc-400">
+            <DialogTitle className="text-foreground">确认清除所有会话</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
               此操作将删除所有 {sessions.length} 个会话及其聊天记录。此操作无法撤销。
             </DialogDescription>
           </DialogHeader>
@@ -139,7 +139,7 @@ export function SessionSettings({
             <Button
               variant="outline"
               onClick={() => setShowClearConfirm(false)}
-              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+              className="border-border text-foreground hover:bg-muted"
             >
               取消
             </Button>

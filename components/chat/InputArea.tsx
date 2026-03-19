@@ -75,9 +75,9 @@ function InputAreaInner({ onSend, isStreaming, onAbort, disabled }: InputAreaPro
   const canSend = input.trim().length > 0 && !isStreaming && !disabled;
 
   return (
-    <div className="border-t border-zinc-800 p-4 bg-zinc-900">
+    <div className="border-t border-border p-4 bg-card">
       <div className="max-w-4xl mx-auto">
-        <div className="relative flex items-end gap-2 bg-zinc-800 rounded-2xl p-2">
+        <div className="relative flex items-end gap-2 bg-muted rounded-2xl p-2">
           <Textarea
             ref={textareaRef}
             value={input}
@@ -89,7 +89,7 @@ function InputAreaInner({ onSend, isStreaming, onAbort, disabled }: InputAreaPro
               "flex-1 resize-none border-0 bg-transparent px-2 py-2",
               "min-h-[44px] max-h-[200px]",
               "focus-visible:ring-0 focus-visible:ring-offset-0",
-              "placeholder:text-zinc-500",
+              "placeholder:text-muted-foreground",
               "disabled:cursor-not-allowed disabled:opacity-50"
             )}
             rows={1}
@@ -116,8 +116,8 @@ function InputAreaInner({ onSend, isStreaming, onAbort, disabled }: InputAreaPro
               className={cn(
                 "shrink-0 rounded-xl",
                 canSend
-                  ? "bg-blue-600 hover:bg-blue-500"
-                  : "bg-zinc-700 opacity-50"
+                  ? "bg-primary hover:bg-primary/90"
+                  : "bg-muted opacity-50"
               )}
               aria-label="发送消息"
             >
@@ -127,7 +127,7 @@ function InputAreaInner({ onSend, isStreaming, onAbort, disabled }: InputAreaPro
         </div>
 
         {/* 提示文字 */}
-        <p className="text-xs text-zinc-600 text-center mt-2">
+        <p className="text-xs text-muted-foreground text-center mt-2">
           AI 可能会出错，请核实重要信息
         </p>
       </div>
