@@ -4,7 +4,7 @@ import {
   createContext,
   useContext,
   useState,
-  useEffect,
+  useEffect, useLayoutEffect,
   useCallback,
   useRef,
   type ReactNode,
@@ -416,7 +416,8 @@ export function ChatProvider({
   }, [sessionId, client]);
 
   // sessionId 变化时：中断旧请求，清理事件监听，获取新消息
-  useEffect(() => {
+  // 使用 useLayoutEffect 避免中间帧闪烁（在浏览器绘制前同步更新状态）
+  useLayoutEffect(() => {
     // 递增 epoch 以使旧的 fetchMessages 结果失效
     sessionEpochRef.current++;
 
