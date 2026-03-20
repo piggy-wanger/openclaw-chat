@@ -572,8 +572,8 @@ export class GatewayClient {
   /**
    * 删除智能体
    */
-  agentsDelete(id: string): Promise<void> {
-    return this.request("agents.delete", { id });
+  agentsDelete(agentId: string): Promise<void> {
+    return this.request("agents.delete", { agentId });
   }
 
   // ==================== 事件订阅 ====================

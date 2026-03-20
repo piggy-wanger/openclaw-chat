@@ -1036,7 +1036,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
               variant="destructive"
               onClick={handleDeleteAgent}
               disabled={saving}
-              className="bg-destructive hover:bg-destructive"
+              className="bg-destructive hover:bg-destructive text-white"
             >
               {saving ? "删除中..." : "确认删除"}
             </Button>
