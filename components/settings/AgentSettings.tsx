@@ -496,7 +496,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
                   <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-xl overflow-hidden">
                     {agent.identity?.avatar ? (
                       <img
-                        src={agent.identity.avatar}
+                        src={client?.resolveAvatarUrl(agent.id, agent.identity.avatar) || agent.identity.avatar}
                         alt={agent.identity?.name || "Avatar"}
                         className="w-full h-full object-cover"
                       />

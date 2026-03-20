@@ -576,6 +576,21 @@ export class GatewayClient {
     return this.request("agents.delete", { agentId });
   }
 
+  /**
+   * 将 agent avatar 路径解析为可访问的 URL
+   * 相对路径 → gateway /avatar/{agentId}，http/data:image 直接返回
+   */
+  resolveAvatarUrl(agentId: string, avatar?: string): string | undefined {
+    if (!avatar?.trim()) return undefined;
+    const trimmed = avatar.trim();
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:image/")) {
+      return trimmed;
+    }
+    const wsUrl = this.config?.url || DEFAULT_URL;
+    const httpBase = wsUrl.replace(/^ws(s?):\/\//, "http$1://");
+    return `${httpBase}/avatar/${agentId}`;
+  }
+
   // ==================== 事件订阅 ====================
 
   /**
