@@ -139,7 +139,7 @@ export async function GET(
       if (a.createdAt !== b.createdAt) {
         return a.createdAt - b.createdAt;
       }
-      return a.id.localeCompare(b.id);
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     });
 
     return NextResponse.json({
