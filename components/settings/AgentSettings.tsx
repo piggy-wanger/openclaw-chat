@@ -149,7 +149,12 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
           default?: string;
         };
       };
-      const agentList = config?.agents?.list || [];
+      const agentDefaults = (config?.agents as Record<string, unknown>)?.defaults as Record<string, unknown> | undefined;
+      const defaultModel = ((agentDefaults?.model as Record<string, unknown>)?.primary as string) || "";
+      const agentList = (config?.agents?.list || []).map((agent: Agent) => ({
+        ...agent,
+        model: agent.model || defaultModel,
+      }));
       setAgents(agentList);
       setDefaultAgentId(config?.agents?.default || null);
     } catch (error) {
