@@ -85,10 +85,15 @@ export async function GET(
       .select()
       .from(groupMessages)
       .where(eq(groupMessages.groupId, id))
-      .orderBy(desc(groupMessages.createdAt))
+      .orderBy(desc(groupMessages.createdAt), desc(groupMessages.id))
       .limit(20);
 
-    const messages = latestMessages.sort((a, b) => a.createdAt - b.createdAt);
+    const messages = latestMessages.sort((a, b) => {
+      if (a.createdAt !== b.createdAt) {
+        return a.createdAt - b.createdAt;
+      }
+      return a.id.localeCompare(b.id);
+    });
 
     return NextResponse.json({
       group: {

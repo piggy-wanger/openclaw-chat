@@ -312,11 +312,13 @@ export async function DELETE(
       );
     }
 
-    await db
-      .delete(groupMembers)
-      .where(and(eq(groupMembers.groupId, id), eq(groupMembers.agentId, targetAgentId)));
-
-    await db.update(groups).set({ updatedAt: Date.now() }).where(eq(groups.id, id));
+    const now = Date.now();
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(groupMembers)
+        .where(and(eq(groupMembers.groupId, id), eq(groupMembers.agentId, targetAgentId)));
+      await tx.update(groups).set({ updatedAt: now }).where(eq(groups.id, id));
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

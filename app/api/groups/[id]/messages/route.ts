@@ -61,6 +61,14 @@ async function ensureGroupExists(groupId: string): Promise<boolean> {
   return groupResult.length > 0;
 }
 
+function isValidSenderType(senderType: unknown): senderType is "user" | "agent" {
+  return senderType === "user" || senderType === "agent";
+}
+
+function isValidMessageRole(role: unknown): role is "user" | "assistant" {
+  return role === "user" || role === "assistant";
+}
+
 function parseBeforeCursor(beforeRaw: string | null): { createdAt: number; id: string } | null {
   if (!beforeRaw) {
     return null;
@@ -170,6 +178,18 @@ export async function POST(
     if (!body.senderType || !body.role || !body.content?.trim()) {
       return NextResponse.json(
         { error: "senderType, role and content are required", status: 400 },
+        { status: 400 }
+      );
+    }
+    if (!isValidSenderType(body.senderType)) {
+      return NextResponse.json(
+        { error: "senderType must be either 'user' or 'agent'", status: 400 },
+        { status: 400 }
+      );
+    }
+    if (!isValidMessageRole(body.role)) {
+      return NextResponse.json(
+        { error: "role must be either 'user' or 'assistant'", status: 400 },
         { status: 400 }
       );
     }
