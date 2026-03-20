@@ -23,6 +23,40 @@ export type Setting = {
   updatedAt: number;
 };
 
+export type Group = {
+  id: string;
+  name: string;
+  avatar?: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type GroupMember = {
+  id: string;
+  groupId: string;
+  agentId: string;
+  name: string;
+  emoji?: string | null;
+  sessionKey?: string | null;
+  role: string;
+  order: number;
+  createdAt: number;
+};
+
+export type GroupMessage = {
+  id: string;
+  groupId: string;
+  senderType: string;
+  senderId?: string | null;
+  senderName?: string | null;
+  senderEmoji?: string | null;
+  role: string;
+  content: string;
+  runId?: string | null;
+  toolCalls?: string | null;
+  createdAt: number;
+};
+
 // API Response Types
 export type SessionsListResponse = {
   sessions: Session[];
