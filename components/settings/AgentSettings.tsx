@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Star, FolderOpen } from "lucide-react";
+import { Plus, Pencil, Trash2, Star, FolderOpen, Upload, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,12 +14,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { GatewayStatus } from "@/hooks/useGateway";
 import type { GatewayClient } from "@/lib/gateway-client";
+import type { GatewayModel } from "@/lib/gateway-types";
 
 // Agent 类型定义
 type AgentIdentity = {
@@ -46,6 +54,8 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [defaultAgentId, setDefaultAgentId] = useState<string | null>(null);
+  const [availableModels, setAvailableModels] = useState<GatewayModel[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
 
   // Dialog states
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -59,11 +69,39 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     id: "",
     name: "",
     emoji: "",
+    avatar: "",
     model: "",
     workspace: "",
   });
 
+  // File input ref for avatar upload
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
   const isConnected = gatewayStatus === "connected";
+
+  // Validate avatar URL to prevent XSS - only allow https:// and data:image/ URIs
+  const validateAvatarUrl = useCallback((url: string): string | null => {
+    const trimmed = url.trim();
+    if (!trimmed) return null;
+
+    // Allow data:image/ URIs (base64 encoded images)
+    if (trimmed.startsWith("data:image/")) {
+      return trimmed;
+    }
+
+    // Allow https:// URLs only
+    if (trimmed.startsWith("https://")) {
+      try {
+        new URL(trimmed);
+        return trimmed;
+      } catch {
+        return null;
+      }
+    }
+
+    // Reject javascript: and other protocols
+    return null;
+  }, []);
 
   // 加载 Agent 列表
   const loadAgents = useCallback(async () => {
@@ -89,9 +127,88 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     }
   }, [isConnected, client]);
 
+  // 加载可用模型列表
+  const loadModels = useCallback(async () => {
+    if (!isConnected || !client) return;
+
+    setModelsLoading(true);
+    try {
+      const models = await client.modelsList();
+      setAvailableModels(models);
+    } catch (error) {
+      console.error("Failed to load models:", error);
+    } finally {
+      setModelsLoading(false);
+    }
+  }, [isConnected, client]);
+
   useEffect(() => {
     loadAgents();
-  }, [loadAgents]);
+    loadModels();
+  }, [loadAgents, loadModels]);
+
+  // 获取模型的显示名称 - 格式: provider/id
+  const getModelDisplayName = (model: GatewayModel): string => {
+    if (model.provider && model.id) {
+      return `${model.provider}/${model.id}`;
+    }
+    if (model.key) {
+      return model.key;
+    }
+    return model.name || model.id || "Unknown Model";
+  };
+
+  // 获取模型的值（用于 select）
+  const getModelValue = (model: GatewayModel): string => {
+    return model.id || model.key || "";
+  };
+
+  // 处理头像上传
+  const handleAvatarUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 验证文件类型
+    const validTypes = ["image/png", "image/jpeg", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+      toast.error("只支持 PNG、JPG、WebP 格式的图片");
+      return;
+    }
+
+    // 验证文件大小 (100KB)
+    if (file.size > 100 * 1024) {
+      toast.error("图片大小不能超过 100KB");
+      return;
+    }
+
+    // 读取文件并验证尺寸
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        if (img.width > 128 || img.height > 128) {
+          toast.error("图片尺寸不能超过 128×128 像素");
+          return;
+        }
+        // 存储 base64 数据
+        setFormData((prev) => ({
+          ...prev,
+          avatar: event.target?.result as string,
+          emoji: "", // 清空 emoji，因为已经有头像了
+        }));
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+
+    // 清空 input 以允许重新选择相同文件
+    e.target.value = "";
+  }, []);
+
+  // 清除头像
+  const clearAvatar = useCallback(() => {
+    setFormData((prev) => ({ ...prev, avatar: "" }));
+  }, []);
 
   // 重置表单
   const resetForm = useCallback(() => {
@@ -99,6 +216,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
       id: "",
       name: "",
       emoji: "",
+      avatar: "",
       model: "",
       workspace: "",
     });
@@ -115,8 +233,9 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     setEditingAgent(agent);
     setFormData({
       id: agent.id,
-      name: agent.identity?.name,
+      name: agent.identity?.name || "",
       emoji: agent.identity?.emoji || "",
+      avatar: agent.identity?.avatar || "",
       model: agent.model,
       workspace: agent.workspace || "",
     });
@@ -129,29 +248,12 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     setShowDeleteDialog(true);
   }, []);
 
-  // 验证 ID 格式
-  const validateId = (id: string): boolean => {
-    return /^[a-zA-Z0-9_-]+$/.test(id);
-  };
-
   // 添加智能体
   const handleAddAgent = useCallback(async () => {
     if (!client) return;
 
-    const { id, name, emoji, model, workspace } = formData;
+    const { name, emoji, model, workspace } = formData;
 
-    if (!id.trim()) {
-      toast.error("请输入智能体 ID");
-      return;
-    }
-    if (!validateId(id)) {
-      toast.error("ID 只能包含字母、数字、下划线和连字符");
-      return;
-    }
-    if (agents.some((a) => a.id === id)) {
-      toast.error("智能体 ID 已存在");
-      return;
-    }
     if (!name.trim()) {
       toast.error("请输入智能体名称");
       return;
@@ -160,36 +262,22 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
       toast.error("请输入模型 ID");
       return;
     }
+    // Validate avatar URL if provided
+    if (formData.avatar && !validateAvatarUrl(formData.avatar)) {
+      toast.error("头像 URL 仅支持 https:// 或 data:image/ 格式");
+      return;
+    }
 
     setSaving(true);
     try {
-      const { baseHash, config } = await client.configGet();
-      const currentConfig = config as {
-        agents?: {
-          list?: Agent[];
-          default?: string;
-        };
-      };
-
-      const newAgent: Agent = {
-        id,
-        identity: {
-          name,
-          emoji: emoji || undefined,
-        },
-        model,
-        workspace: workspace || undefined,
-      };
-
-      const patch = {
-        agents: {
-          list: [...agents, newAgent],
-          ...(currentConfig.agents?.default !== undefined && { default: currentConfig.agents.default }),
-        },
-      };
-
-      await client.configSet(baseHash, patch);
-      await client.configApply();
+      // 使用 agents.create RPC
+      await client.agentsCreate({
+        name: name.trim(),
+        model: model.trim(),
+        workspace: workspace.trim() || undefined,
+        emoji: emoji.trim() || undefined,
+        avatar: formData.avatar || undefined,
+      });
 
       toast.success("智能体添加成功");
       setShowAddDialog(false);
@@ -201,7 +289,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     } finally {
       setSaving(false);
     }
-  }, [client, formData, agents, loadAgents, resetForm]);
+  }, [client, formData, loadAgents, resetForm]);
 
   // 编辑智能体
   const handleEditAgent = useCallback(async () => {
@@ -217,42 +305,23 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
       toast.error("请输入模型 ID");
       return;
     }
+    // Validate avatar URL if provided
+    if (formData.avatar && !validateAvatarUrl(formData.avatar)) {
+      toast.error("头像 URL 仅支持 https:// 或 data:image/ 格式");
+      return;
+    }
 
     setSaving(true);
     try {
-      const { baseHash, config } = await client.configGet();
-      const currentConfig = config as {
-        agents?: {
-          list?: Agent[];
-          default?: string;
-        };
-      };
-
-      const updatedAgents = agents.map((a) => {
-        if (a.id === editingAgent.id) {
-          return {
-            ...a,
-            identity: {
-              ...a.identity,
-              name,
-              emoji: emoji || undefined,
-            },
-            model,
-            workspace: workspace || undefined,
-          };
-        }
-        return a;
+      // 使用 agents.update RPC
+      await client.agentsUpdate({
+        id: editingAgent.id,
+        name: name.trim(),
+        model: model.trim(),
+        workspace: workspace.trim() || undefined,
+        emoji: emoji.trim() || undefined,
+        avatar: formData.avatar || undefined,
       });
-
-      const patch = {
-        agents: {
-          list: updatedAgents,
-          ...(currentConfig.agents?.default !== undefined && { default: currentConfig.agents.default }),
-        },
-      };
-
-      await client.configSet(baseHash, patch);
-      await client.configApply();
 
       toast.success("智能体更新成功");
       setShowEditDialog(false);
@@ -265,7 +334,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     } finally {
       setSaving(false);
     }
-  }, [client, editingAgent, formData, agents, loadAgents, resetForm]);
+  }, [client, editingAgent, formData, loadAgents, resetForm]);
 
   // 删除智能体
   const handleDeleteAgent = useCallback(async () => {
@@ -273,25 +342,8 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
 
     setSaving(true);
     try {
-      const { baseHash, config } = await client.configGet();
-      const currentConfig = config as {
-        agents?: {
-          list?: Agent[];
-          default?: string;
-        };
-      };
-
-      const updatedAgents = agents.filter((a) => a.id !== deletingAgent.id);
-
-      const patch = {
-        agents: {
-          list: updatedAgents,
-          ...(currentConfig.agents?.default !== undefined && { default: currentConfig.agents.default }),
-        },
-      };
-
-      await client.configSet(baseHash, patch);
-      await client.configApply();
+      // 使用 agents.delete RPC
+      await client.agentsDelete(deletingAgent.id);
 
       toast.success("智能体删除成功");
       setShowDeleteDialog(false);
@@ -303,7 +355,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     } finally {
       setSaving(false);
     }
-  }, [client, deletingAgent, agents, loadAgents]);
+  }, [client, deletingAgent, loadAgents]);
 
   // 未连接时显示提示
   if (!isConnected) {
@@ -372,8 +424,16 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
               >
                 <div className="px-4 py-3 flex items-center gap-3">
                   {/* Emoji/Avatar */}
-                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-xl">
-                    {agent.identity?.emoji || agent.identity?.name?.charAt(0)?.toUpperCase() || "?"}
+                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-xl overflow-hidden">
+                    {agent.identity?.avatar ? (
+                      <img
+                        src={agent.identity.avatar}
+                        alt={agent.identity?.name || "Avatar"}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      agent.identity?.emoji || agent.identity?.name?.charAt(0)?.toUpperCase() || "?"
+                    )}
                   </div>
 
                   {/* Info */}
@@ -449,23 +509,6 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
-                ID <span className="text-destructive">*</span>
-              </label>
-              <Input
-                value={formData.id}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, id: e.target.value }))
-                }
-                placeholder="my-agent"
-                className="bg-muted border-border text-foreground font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                唯一标识符，只能包含字母、数字、下划线和连字符
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
                 名称 <span className="text-destructive">*</span>
               </label>
               <Input
@@ -476,34 +519,146 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
                 placeholder="我的智能体"
                 className="bg-muted border-border text-foreground"
               />
+              <p className="text-xs text-muted-foreground">
+                智能体 ID 将根据名称自动生成
+              </p>
             </div>
 
+            {/* 头像上传 */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Emoji</label>
+              <label className="text-sm font-medium text-foreground">头像</label>
+              <div className="flex items-center gap-3">
+                {/* 预览区域 */}
+                <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-muted border border-border flex items-center justify-center overflow-hidden">
+                  {formData.avatar ? (
+                    <img
+                      src={formData.avatar}
+                      alt="预览"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : formData.emoji ? (
+                    <span className="text-xl">{formData.emoji}</span>
+                  ) : (
+                    <span className="text-muted-foreground text-lg">?</span>
+                  )}
+                </div>
+                {/* 上传按钮和文本输入 */}
+                <div className="flex-1 space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={handleAvatarUpload}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => avatarInputRef.current?.click()}
+                      className="border-border text-foreground hover:bg-muted"
+                    >
+                      <Upload className="w-4 h-4 mr-1" />
+                      上传图片
+                    </Button>
+                    {formData.avatar && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearAvatar}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    PNG/JPG/WebP，最大 128×128px，100KB
+                  </p>
+                </div>
+              </div>
+              {/* Fallback: 文本输入 (emoji 或 URL) */}
               <Input
                 value={formData.emoji}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, emoji: e.target.value }))
-                }
-                placeholder="🤖"
-                className="bg-muted border-border text-foreground"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Check if input looks like a URL
+                  if (value.startsWith("https://") || value.startsWith("data:")) {
+                    const validatedUrl = validateAvatarUrl(value);
+                    if (validatedUrl) {
+                      setFormData((prev) => ({
+                        ...prev,
+                        emoji: "",
+                        avatar: validatedUrl,
+                      }));
+                    } else {
+                      // Invalid URL - keep as emoji text (will be rejected on submit or show error)
+                      setFormData((prev) => ({
+                        ...prev,
+                        emoji: value,
+                        avatar: "",
+                      }));
+                    }
+                  } else {
+                    // Regular emoji or text
+                    setFormData((prev) => ({
+                      ...prev,
+                      emoji: value,
+                      avatar: "",
+                    }));
+                  }
+                }}
+                placeholder="或直接输入 emoji / 头像 URL"
+                className="bg-muted border-border text-foreground text-sm"
               />
             </div>
 
+            {/* 模型选择 */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
                 模型 <span className="text-destructive">*</span>
               </label>
-              <Input
-                value={formData.model}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, model: e.target.value }))
-                }
-                placeholder="anthropic/claude-sonnet-4-20250514"
-                className="bg-muted border-border text-foreground font-mono text-sm"
-              />
+              {modelsLoading ? (
+                <div className="flex items-center gap-2 px-3 py-2 text-muted-foreground text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  加载模型列表...
+                </div>
+              ) : availableModels.length === 0 ? (
+                <Input
+                  value={formData.model}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, model: e.target.value }))
+                  }
+                  placeholder="anthropic/claude-sonnet-4-20250514"
+                  className="bg-muted border-border text-foreground font-mono text-sm"
+                />
+              ) : (
+                <Select
+                  value={formData.model}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, model: value || "" }))
+                  }
+                >
+                  <SelectTrigger className="bg-muted border-border text-foreground font-mono text-sm">
+                    <SelectValue placeholder="选择模型" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableModels.map((model) => (
+                      <SelectItem
+                        key={getModelValue(model)}
+                        value={getModelValue(model)}
+                      >
+                        {getModelDisplayName(model)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
+            {/* 工作目录 */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">工作目录</label>
               <Input
@@ -511,9 +666,12 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, workspace: e.target.value }))
                 }
-                placeholder="/path/to/workspace"
+                placeholder="~/.openclaw/workspace-{agentId}"
                 className="bg-muted border-border text-foreground font-mono text-sm"
               />
+              <p className="text-xs text-muted-foreground">
+                留空则默认为 ~/.openclaw/workspace-{`{agentId}`}
+              </p>
             </div>
           </div>
 
@@ -548,14 +706,10 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">ID</label>
-              <Input
-                value={formData.id}
-                disabled
-                className="bg-muted/50 border-border text-muted-foreground font-mono"
-              />
-              <p className="text-xs text-muted-foreground">ID 创建后不可修改</p>
+            {/* 只读 ID 显示 */}
+            <div className="px-3 py-2 bg-muted/50 rounded-md border border-border">
+              <span className="text-xs text-muted-foreground">ID: </span>
+              <span className="text-sm font-mono text-foreground">{formData.id}</span>
             </div>
 
             <div className="space-y-2">
@@ -572,43 +726,152 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
               />
             </div>
 
+            {/* 头像上传 */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Emoji</label>
+              <label className="text-sm font-medium text-foreground">头像</label>
+              <div className="flex items-center gap-3">
+                {/* 预览区域 */}
+                <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-muted border border-border flex items-center justify-center overflow-hidden">
+                  {formData.avatar ? (
+                    <img
+                      src={formData.avatar}
+                      alt="预览"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : formData.emoji ? (
+                    <span className="text-xl">{formData.emoji}</span>
+                  ) : (
+                    <span className="text-muted-foreground text-lg">?</span>
+                  )}
+                </div>
+                {/* 上传按钮和文本输入 */}
+                <div className="flex-1 space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={handleAvatarUpload}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => avatarInputRef.current?.click()}
+                      className="border-border text-foreground hover:bg-muted"
+                    >
+                      <Upload className="w-4 h-4 mr-1" />
+                      上传图片
+                    </Button>
+                    {formData.avatar && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearAvatar}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    PNG/JPG/WebP，最大 128×128px，100KB
+                  </p>
+                </div>
+              </div>
+              {/* Fallback: 文本输入 (emoji 或 URL) */}
               <Input
                 value={formData.emoji}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, emoji: e.target.value }))
-                }
-                placeholder="🤖"
-                className="bg-muted border-border text-foreground"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Check if input looks like a URL
+                  if (value.startsWith("https://") || value.startsWith("data:")) {
+                    const validatedUrl = validateAvatarUrl(value);
+                    if (validatedUrl) {
+                      setFormData((prev) => ({
+                        ...prev,
+                        emoji: "",
+                        avatar: validatedUrl,
+                      }));
+                    } else {
+                      // Invalid URL - keep as emoji text (will be rejected on submit or show error)
+                      setFormData((prev) => ({
+                        ...prev,
+                        emoji: value,
+                        avatar: "",
+                      }));
+                    }
+                  } else {
+                    // Regular emoji or text
+                    setFormData((prev) => ({
+                      ...prev,
+                      emoji: value,
+                      avatar: "",
+                    }));
+                  }
+                }}
+                placeholder="或直接输入 emoji / 头像 URL"
+                className="bg-muted border-border text-foreground text-sm"
               />
             </div>
 
+            {/* 模型选择 */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
                 模型 <span className="text-destructive">*</span>
               </label>
-              <Input
-                value={formData.model}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, model: e.target.value }))
-                }
-                placeholder="anthropic/claude-sonnet-4-20250514"
-                className="bg-muted border-border text-foreground font-mono text-sm"
-              />
+              {modelsLoading ? (
+                <div className="flex items-center gap-2 px-3 py-2 text-muted-foreground text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  加载模型列表...
+                </div>
+              ) : availableModels.length === 0 ? (
+                <Input
+                  value={formData.model}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, model: e.target.value }))
+                  }
+                  placeholder="anthropic/claude-sonnet-4-20250514"
+                  className="bg-muted border-border text-foreground font-mono text-sm"
+                />
+              ) : (
+                <Select
+                  value={formData.model}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, model: value || "" }))
+                  }
+                >
+                  <SelectTrigger className="bg-muted border-border text-foreground font-mono text-sm">
+                    <SelectValue placeholder="选择模型" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableModels.map((model) => (
+                      <SelectItem
+                        key={getModelValue(model)}
+                        value={getModelValue(model)}
+                      >
+                        {getModelDisplayName(model)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">工作目录</label>
-              <Input
-                value={formData.workspace}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, workspace: e.target.value }))
-                }
-                placeholder="/path/to/workspace"
-                className="bg-muted border-border text-foreground font-mono text-sm"
-              />
-            </div>
+            {/* 只读工作目录显示 */}
+            {formData.workspace && (
+              <div className="px-3 py-2 bg-muted/50 rounded-md border border-border">
+                <div className="flex items-center gap-2">
+                  <FolderOpen className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                  <span className="text-xs text-muted-foreground">工作目录: </span>
+                  <span className="text-xs font-mono text-foreground truncate">
+                    {formData.workspace}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter>

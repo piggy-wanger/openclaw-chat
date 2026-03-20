@@ -512,6 +512,16 @@ export class GatewayClient {
   }
 
   /**
+   * 删除会话
+   */
+  sessionsDelete(key: string, options?: { deleteTranscript?: boolean }): Promise<void> {
+    return this.request("sessions.delete", {
+      key,
+      deleteTranscript: options?.deleteTranscript ?? true,
+    });
+  }
+
+  /**
    * 获取配置
    */
   configGet(): Promise<{ config: Record<string, unknown>; baseHash: string }> {
@@ -530,6 +540,40 @@ export class GatewayClient {
    */
   configApply(): Promise<void> {
     return this.request("config.apply", {});
+  }
+
+  /**
+   * 创建智能体
+   */
+  agentsCreate(params: {
+    name: string;
+    workspace?: string;
+    emoji?: string;
+    avatar?: string;
+    model?: string;
+  }): Promise<{ id: string }> {
+    return this.request("agents.create", params as Record<string, unknown>);
+  }
+
+  /**
+   * 更新智能体
+   */
+  agentsUpdate(params: {
+    id: string;
+    name?: string;
+    workspace?: string;
+    emoji?: string;
+    avatar?: string;
+    model?: string;
+  }): Promise<void> {
+    return this.request("agents.update", params as Record<string, unknown>);
+  }
+
+  /**
+   * 删除智能体
+   */
+  agentsDelete(id: string): Promise<void> {
+    return this.request("agents.delete", { id });
   }
 
   // ==================== 事件订阅 ====================

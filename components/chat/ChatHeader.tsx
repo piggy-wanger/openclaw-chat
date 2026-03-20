@@ -121,9 +121,18 @@ export function ChatHeader({
     return availableModels[0]?.id || availableModels[0]?.key || "";
   }, [currentSession?.model, settings.default_model, availableModels]);
 
-  // 获取模型的显示名称
+  // 获取模型的显示名称 - 格式: provider/id
   const getModelDisplayName = (model: GatewayModel): string => {
-    return model.name || model.id || model.key || "Unknown Model";
+    // 优先使用 provider/id 格式
+    if (model.provider && model.id) {
+      return `${model.provider}/${model.id}`;
+    }
+    // 如果有 key 字段（已经包含 provider/id 格式）
+    if (model.key) {
+      return model.key;
+    }
+    // 回退到 name 或 id
+    return model.name || model.id || "Unknown Model";
   };
 
   // 获取模型的值（用于 select）
