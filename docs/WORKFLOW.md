@@ -9,14 +9,21 @@
 | 角色 | 谁 | 职责 |
 |------|-----|------|
 | 编排层（Zoe） | 庸鹿（我） | 拆解需求、写 prompt、派 Agent、监控状态、审查 Review、失败重试 |
-| 执行层 | Claude Code（ACP） | 写代码、跑测试、提交 PR |
-| Review 层 | Codex（ACP） | Code Review，发现问题直接在 PR 评论 |
+| 执行层 | Codex（tmux） | 写代码、跑测试、提交 PR |
+| Review 层 | Codex review + Gemini review | 双 Review：Codex 自带 review + Gemini 2.5 Flash 补充审查 |
 | 人类 | 旧青年 | 人工 Review 合并、关键决策、提供 API 信息 |
 
-> 分工理由（来自文章实践）：
-> - Claude Code 前端能力强，权限问题少，适合执行代码编写
-> - Codex 擅长发现边界情况、逻辑错误、竞态条件，误报率低，适合审查
+> 分工理由：
+> - Codex 写代码能力强，适合执行
+> - Codex 自带 `codex review` 能发现边界情况、逻辑错误、竞态条件
+> - Gemini 2.5 Flash 作为第二双眼睛，补充不同视角
 > - 编排+执行+审查三层分离，互相独立
+
+### 群组功能开发特殊规则
+
+1. **同一 Codex 进程**：整个群组功能开发（P0-P3）只用一个 `codex-executor` tmux session，任务间不断开
+2. **双 Review**：PR 创建后，先 `codex review --uncommitted`，再 `gemini -m gemini-2.5-flash` review
+3. **Merge 卡点**：双 review 通过 + CI 绿了 → 通知旧青年确认 → 收到确认后才执行 `gh pr merge`
 
 ---
 
@@ -38,7 +45,7 @@ tmux 是 Agent 的**持久载体**，不是一次性任务窗口：
 
 | tmux session | 用途 | 生命周期 |
 |---|---|---|
-| `claude-executor` | Claude Code 执行层 | 永久保留，复用 |
+| `codex-executor` | Codex 执行层 | 永久保留，复用（群组功能整个周期共用） |
 | `codex-reviewer` | Codex Review 层 | 永久保留，复用 |
 
 **规则：**
@@ -75,13 +82,13 @@ git worktree add ../openclaw-chat-phase2a -b feat/phase2a-db-api origin/master
 cd ../openclaw-chat-phase2a
 npm install
 
-# 3. 在已有的 claude-executor tmux session 中执行
-tmux send-keys -t claude-executor "cd /home/bowie/projects/openclaw-chat-phase2a && claude -p '...prompt...' --print --permission-mode bypassPermissions" Enter
+# 3. 在已有的 codex-executor tmux session 中执行
+tmux send-keys -t codex-executor "cd /home/bowie/projects/openclaw-chat-phase2a && codex exec '...prompt...'" Enter
 ```
 
 **关键特性：**
 - 每个 Agent 在独立 worktree 工作，不互相干扰
-- Claude Code 用 `--print --permission-mode bypassPermissions` 全自动执行
+- **整个开发周期共用一个 codex-executor tmux session**，任务间不断开
 - tmux 会话可中途干预：走偏了直接 `tmux send-keys` 纠正
 - Agent 只拿到完成该任务需要的最小上下文（不过度塞信息）
 
@@ -121,32 +128,40 @@ gh pr create --fill
 
 **⚠️ 注意：PR 创建不等于完成。** "完成"的定义是全部通过下方所有检查。
 
-### Step 5: 自动化 Code Review
+### Step 5: 自动化 Code Review（双 Review）
 
-PR 创建后，在已有的 codex-reviewer tmux session 中启动 Code Review：
+PR 创建后，依次执行两个 review：
 
+**Review 1: Codex 自带 review**
 ```bash
-# 在已有的 codex-reviewer tmux session 中执行
-tmux send-keys -t codex-reviewer "cd /home/bowie/projects/openclaw-chat-phase2a && codex exec '...prompt...'" Enter
-```
-
-**Reviewer Prompt 模板：**
-```
-"Review PR #{pr_number} in {worktree}。
+cd /home/bowie/projects/openclaw-chat-<worktree>
+codex review --uncommitted --base master "Review this PR。
 检查:
 1. 逻辑错误、边界情况、竞态条件
 2. 错误处理是否完善
 3. 类型安全
-4. 是否符合 TECH-DESIGN 规范
+4. 是否符合 docs/GROUP-CHAT-PLAN.md 规范
 5. 性能问题（不必要渲染、内存泄漏等）
 6. 安全问题
-对每个发现的问题，用 JSON 数组输出 {severity,file,line,description}。
+对每个发现的问题，说明 severity、file、line、description。
 末尾输出 REVIEW_SUMMARY:PASS 或 REVIEW_SUMMARY:FAIL。"
 ```
 
+**Review 2: Gemini 补充 review**
+```bash
+cd /home/bowie/projects/openclaw-chat-<worktree>
+git diff origin/master | gemini -m gemini-2.5-flash -p "作为资深前端架构师 review 这段 diff，关注：
+1. 逻辑错误、边界情况
+2. React 性能（不必要渲染、useEffect 依赖问题）
+3. TypeScript 类型安全
+4. 是否符合群组功能 Room 模型设计
+给出改进建议，末尾输出 PASS 或 FAIL。" -o text
+```
+
 **完成标准：**
-- ✅ 所有 critical 和 major 问题被解决
-- ✅ Codex reviewer 批准（无 critical 评论）
+- ✅ Codex review 无 critical/major 问题
+- ✅ Gemini review PASS
+- ✅ 两者都通过才进入 Step 6
 
 ### Step 6: CI 测试
 

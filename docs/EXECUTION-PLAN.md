@@ -126,7 +126,54 @@ Layout + Sidebar + Chat Area + Tool Call Cards。
 
 ---
 
-## 四、执行节奏
+## 六、群组功能开发（Group Chat）
+
+> 基于文档 `docs/GROUP-CHAT-PLAN.md`，采用 Room 模型实现多 Agent 群组聊天
+> 执行层：Codex（单进程）| Review：Codex review + Gemini 2.5 Flash
+> 最后更新: 2026-03-20
+
+### Phase G0: 数据层 + 基础消息收发
+
+| # | 任务 | 分支 | 状态 |
+|---|------|------|------|
+| G0.1 | Schema: 新增 groups/group_members/group_messages 表 | `feat/group-p0-schema` | 待开始 |
+| G0.2 | 数据库迁移 | `feat/group-p0-schema` | 待开始 |
+| G0.3 | TypeScript 类型: Group/GroupMember/GroupMessage | `feat/group-p0-schema` | 待开始 |
+| G0.4 | API: 群组 CRUD | `feat/group-p0-api` | 待开始 |
+| G0.5 | API: 成员管理 | `feat/group-p0-api` | 待开始 |
+| G0.6 | API: 消息 CRUD | `feat/group-p0-api` | 待开始 |
+| G0.7 | GroupChatProvider hook | `feat/group-p0-hook` | 待开始 |
+| G0.8 | 页面路由：群组走 GroupChatProvider | `feat/group-p0-hook` | 待开始 |
+
+### Phase G1: UI 展示
+
+| # | 任务 | 分支 | 状态 |
+|---|------|------|------|
+| G1.1 | GroupMessageItem 组件 | `feat/group-p1-ui` | 待开始 |
+| G1.2 | 多 Agent 并发流式展示 | `feat/group-p1-ui` | 待开始 |
+| G1.3 | 群组 ChatHeader | `feat/group-p1-ui` | 待开始 |
+| G1.4 | 侧边栏接入群组数据 | `feat/group-p1-ui` | 待开始 |
+| G1.5 | 群组会话页面 | `feat/group-p1-ui` | 待开始 |
+
+### Phase G2: 群组管理
+
+| # | 任务 | 分支 | 状态 |
+|---|------|------|------|
+| G2.1 | GroupSettingsDialog | `feat/group-p2-settings` | 待开始 |
+| G2.2 | CreateGroupDialog 接入 API | `feat/group-p2-settings` | 待开始 |
+| G2.3 | 成员在线/离线状态 | `feat/group-p2-settings` | 待开始 |
+
+### Phase G3: 增强功能
+
+| # | 任务 | 分支 | 状态 |
+|---|------|------|------|
+| G3.1 | @提及功能 | `feat/group-p3-mention` | 待开始 |
+| G3.2 | Agent 间上下文共享 | `feat/group-p3-ctx` | 待开始 |
+| G3.3 | 消息历史分页 | `feat/group-p3-page` | 待开始 |
+
+---
+
+*最后更新: 2026-03-20*
 
 | Phase | 任务数 | 状态 |
 |-------|--------|------|
