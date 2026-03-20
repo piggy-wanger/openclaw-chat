@@ -191,9 +191,13 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     return model.name || model.id || "Unknown Model";
   };
 
-  // 获取模型的值（用于 select）
+  // 获取模型的值（用于 select）- 保留完整的 provider/model 格式
   const getModelValue = (model: GatewayModel): string => {
-    return model.id || model.key || "";
+    // 优先使用完整的 provider/id 格式
+    if (model.provider && model.id) {
+      return `${model.provider}/${model.id}`;
+    }
+    return model.key || model.id || "";
   };
 
   // 处理头像上传
@@ -330,25 +334,23 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     setSaving(true);
     try {
       // 使用 agents.create RPC - name 参数会成为智能体的 ID
+      // 注意：gateway 的 agents.create 不接受 model 参数，需要先创建再更新
       const result = await client.agentsCreate({
         name: normalizedId,
-        model: model.trim(),
-        workspace: workspace.trim() || undefined,
+        workspace: workspace.trim() || `~/.openclaw/workspace-${normalizedId}`,
         emoji: emoji.trim() || undefined,
         avatar: formData.avatar || undefined,
       });
 
-      // 如果提供了显示名称且与 ID 不同，需要更新
+      // 创建成功后，统一用 agentsUpdate 设置 name + model + emoji + avatar
       const trimmedDisplayName = displayName.trim();
-      if (trimmedDisplayName && trimmedDisplayName !== normalizedId) {
-        await client.agentsUpdate({
-          id: result.id,
-          name: trimmedDisplayName,
-          emoji: emoji.trim() || undefined,
-          avatar: formData.avatar || undefined,
-          model: model.trim(),
-        });
-      }
+      await client.agentsUpdate({
+        id: result.id,
+        name: trimmedDisplayName || normalizedId,
+        model: model.trim(),
+        emoji: emoji.trim() || undefined,
+        avatar: formData.avatar || undefined,
+      });
 
       toast.success("智能体添加成功");
       setShowAddDialog(false);
