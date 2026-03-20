@@ -3,7 +3,7 @@
 export type Session = {
   id: string;
   title: string;
-  type: string;
+  type: "direct" | "group";
   model: string;
   createdAt: number;
   updatedAt: number;
@@ -21,6 +21,40 @@ export type Setting = {
   key: string;
   value: string;
   updatedAt: number;
+};
+
+export type Group = {
+  id: string;
+  name: string;
+  avatar?: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type GroupMember = {
+  id: string;
+  groupId: string;
+  agentId: string;
+  name: string;
+  emoji?: string | null;
+  sessionKey?: string | null;
+  role: "member" | "admin";
+  order: number;
+  createdAt: number;
+};
+
+export type GroupMessage = {
+  id: string;
+  groupId: string;
+  senderType: "user" | "agent";
+  senderId?: string | null;
+  senderName?: string | null;
+  senderEmoji?: string | null;
+  role: "user" | "assistant";
+  content: string;
+  runId?: string | null;
+  toolCalls?: string | null;
+  createdAt: number;
 };
 
 // API Response Types
