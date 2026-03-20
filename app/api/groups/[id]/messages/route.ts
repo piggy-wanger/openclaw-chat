@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db, groups, groupMessages } from "@/db";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, lt, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { ErrorResponse } from "@/lib/types";
 
@@ -25,7 +25,7 @@ type MessagesListResponse = {
   pagination: {
     limit: number;
     hasMore: boolean;
-    nextBefore: number | null;
+    nextBefore: string | null;
   };
 };
 
@@ -61,7 +61,21 @@ async function ensureGroupExists(groupId: string): Promise<boolean> {
   return groupResult.length > 0;
 }
 
-// GET /api/groups/[id]/messages?limit=50&before=xxx - Paginated messages
+function parseBeforeCursor(beforeRaw: string | null): { createdAt: number; id: string } | null {
+  if (!beforeRaw) {
+    return null;
+  }
+
+  const [createdAtRaw, idRaw] = beforeRaw.split(":");
+  const createdAt = Number.parseInt(createdAtRaw ?? "", 10);
+  if (Number.isNaN(createdAt) || !idRaw) {
+    return null;
+  }
+
+  return { createdAt, id: idRaw };
+}
+
+// GET /api/groups/[id]/messages?limit=50&before=createdAt:id - Paginated messages
 export async function GET(
   request: Request,
   { params }: RouteParams
@@ -81,31 +95,51 @@ export async function GET(
     const beforeRaw = searchParams.get("before");
 
     const limit = Number.isNaN(limitRaw) ? 50 : Math.min(Math.max(limitRaw, 1), 100);
-    const before = beforeRaw ? Number.parseInt(beforeRaw, 10) : null;
+    const before = parseBeforeCursor(beforeRaw);
 
-    const rows = before && !Number.isNaN(before)
+    if (beforeRaw && !before) {
+      return NextResponse.json(
+        { error: "before must be in format 'createdAt:id'", status: 400 },
+        { status: 400 }
+      );
+    }
+
+    const rows = before
       ? await db
           .select()
           .from(groupMessages)
-          .where(and(eq(groupMessages.groupId, id), lt(groupMessages.createdAt, before)))
-          .orderBy(desc(groupMessages.createdAt))
+          .where(
+            and(
+              eq(groupMessages.groupId, id),
+              or(
+                lt(groupMessages.createdAt, before.createdAt),
+                and(eq(groupMessages.createdAt, before.createdAt), lt(groupMessages.id, before.id))
+              )
+            )
+          )
+          .orderBy(desc(groupMessages.createdAt), desc(groupMessages.id))
           .limit(limit + 1)
       : await db
           .select()
           .from(groupMessages)
           .where(eq(groupMessages.groupId, id))
-          .orderBy(desc(groupMessages.createdAt))
+          .orderBy(desc(groupMessages.createdAt), desc(groupMessages.id))
           .limit(limit + 1);
 
     const hasMore = rows.length > limit;
-    const pageRows = rows.slice(0, limit).sort((a, b) => a.createdAt - b.createdAt);
+    const pageRows = rows.slice(0, limit).sort((a, b) => {
+      if (a.createdAt !== b.createdAt) {
+        return a.createdAt - b.createdAt;
+      }
+      return a.id.localeCompare(b.id);
+    });
 
     return NextResponse.json({
       messages: pageRows,
       pagination: {
         limit,
         hasMore,
-        nextBefore: pageRows.length > 0 ? pageRows[0].createdAt : null,
+        nextBefore: pageRows.length > 0 ? `${pageRows[0].createdAt}:${pageRows[0].id}` : null,
       },
     });
   } catch (error) {
@@ -161,8 +195,10 @@ export async function POST(
       createdAt: now,
     };
 
-    await db.insert(groupMessages).values(message);
-    await db.update(groups).set({ updatedAt: now }).where(eq(groups.id, id));
+    await db.transaction(async (tx) => {
+      await tx.insert(groupMessages).values(message);
+      await tx.update(groups).set({ updatedAt: now }).where(eq(groups.id, id));
+    });
 
     return NextResponse.json({ message });
   } catch (error) {

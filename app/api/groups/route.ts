@@ -64,10 +64,26 @@ export async function GET(): Promise<NextResponse<GroupsListResponse | ErrorResp
 export async function POST(request: Request): Promise<NextResponse<GroupResponse | ErrorResponse>> {
   try {
     const body = (await request.json()) as CreateGroupRequest;
+    const members = body.members ?? [];
 
     if (!body.name?.trim()) {
       return NextResponse.json(
         { error: "name is required", status: 400 },
+        { status: 400 }
+      );
+    }
+
+    if (members.some((member) => !member.agentId?.trim() || !member.name?.trim())) {
+      return NextResponse.json(
+        { error: "members[].agentId and members[].name are required", status: 400 },
+        { status: 400 }
+      );
+    }
+
+    const memberAgentIds = members.map((member) => member.agentId.trim());
+    if (new Set(memberAgentIds).size !== memberAgentIds.length) {
+      return NextResponse.json(
+        { error: "members[].agentId cannot contain duplicates", status: 400 },
         { status: 400 }
       );
     }
@@ -82,31 +98,25 @@ export async function POST(request: Request): Promise<NextResponse<GroupResponse
       updatedAt: now,
     };
 
-    await db.insert(groups).values(newGroup);
+    await db.transaction(async (tx) => {
+      await tx.insert(groups).values(newGroup);
 
-    const members = body.members ?? [];
-    if (members.some((member) => !member.agentId?.trim() || !member.name?.trim())) {
-      return NextResponse.json(
-        { error: "members[].agentId and members[].name are required", status: 400 },
-        { status: 400 }
-      );
-    }
-
-    if (members.length > 0) {
-      await db.insert(groupMembers).values(
-        members.map((member, index) => ({
-          id: nanoid(),
-          groupId,
-          agentId: member.agentId.trim(),
-          name: member.name.trim(),
-          emoji: member.emoji ?? null,
-          sessionKey: member.sessionKey ?? null,
-          role: "member" as const,
-          order: index,
-          createdAt: now,
-        }))
-      );
-    }
+      if (members.length > 0) {
+        await tx.insert(groupMembers).values(
+          members.map((member, index) => ({
+            id: nanoid(),
+            groupId,
+            agentId: member.agentId.trim(),
+            name: member.name.trim(),
+            emoji: member.emoji ?? null,
+            sessionKey: member.sessionKey ?? null,
+            role: "member" as const,
+            order: index,
+            createdAt: now,
+          }))
+        );
+      }
+    });
 
     return NextResponse.json({
       group: newGroup,

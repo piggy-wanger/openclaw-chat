@@ -59,6 +59,10 @@ async function ensureGroupExists(groupId: string): Promise<boolean> {
   return groupResult.length > 0;
 }
 
+function isValidMemberRole(role: unknown): role is "member" | "admin" {
+  return role === "member" || role === "admin";
+}
+
 // GET /api/groups/[id]/members - Get group members
 export async function GET(
   _request: Request,
@@ -113,6 +117,13 @@ export async function POST(
       );
     }
 
+    if (body.role !== undefined && !isValidMemberRole(body.role)) {
+      return NextResponse.json(
+        { error: "role must be either 'member' or 'admin'", status: 400 },
+        { status: 400 }
+      );
+    }
+
     const now = Date.now();
 
     const existingMember = await db
@@ -140,8 +151,10 @@ export async function POST(
       createdAt: now,
     };
 
-    await db.insert(groupMembers).values(member);
-    await db.update(groups).set({ updatedAt: now }).where(eq(groups.id, id));
+    await db.transaction(async (tx) => {
+      await tx.insert(groupMembers).values(member);
+      await tx.update(groups).set({ updatedAt: now }).where(eq(groups.id, id));
+    });
 
     return NextResponse.json({ member });
   } catch (error) {
@@ -221,6 +234,12 @@ export async function PATCH(
     if (body.order !== undefined) {
       updateData.order = body.order;
     }
+    if (body.role !== undefined && !isValidMemberRole(body.role)) {
+      return NextResponse.json(
+        { error: "role must be either 'member' or 'admin'", status: 400 },
+        { status: 400 }
+      );
+    }
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
@@ -229,13 +248,14 @@ export async function PATCH(
       );
     }
 
-    await db
-      .update(groupMembers)
-      .set(updateData)
-      .where(and(eq(groupMembers.groupId, id), eq(groupMembers.agentId, targetAgentId)));
-
     const now = Date.now();
-    await db.update(groups).set({ updatedAt: now }).where(eq(groups.id, id));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(groupMembers)
+        .set(updateData)
+        .where(and(eq(groupMembers.groupId, id), eq(groupMembers.agentId, targetAgentId)));
+      await tx.update(groups).set({ updatedAt: now }).where(eq(groups.id, id));
+    });
 
     const updatedMember = await db
       .select()
