@@ -506,7 +506,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      agent.identity?.emoji || agent.identity?.name?.charAt(0)?.toUpperCase() || "?"
+                      agent.identity?.emoji || "🤖"
                     )}
                   </div>
 
