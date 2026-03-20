@@ -345,7 +345,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
       // 创建成功后，统一用 agentsUpdate 设置 name + model + emoji + avatar
       const trimmedDisplayName = displayName.trim();
       await client.agentsUpdate({
-        agentId: result.id,
+        agentId: result.agentId,
         name: trimmedDisplayName || normalizedId,
         model: model.trim(),
         emoji: emoji.trim() || undefined,

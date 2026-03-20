@@ -551,7 +551,7 @@ export class GatewayClient {
     emoji?: string;
     avatar?: string;
     model?: string;
-  }): Promise<{ id: string }> {
+  }): Promise<{ ok: boolean; agentId: string; name: string; workspace: string }> {
     return this.request("agents.create", params as Record<string, unknown>);
   }
 
