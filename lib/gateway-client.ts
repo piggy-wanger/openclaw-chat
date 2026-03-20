@@ -559,7 +559,7 @@ export class GatewayClient {
    * 更新智能体
    */
   agentsUpdate(params: {
-    id: string;
+    agentId: string;
     name?: string;
     workspace?: string;
     emoji?: string;

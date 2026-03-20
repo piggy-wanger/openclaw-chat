@@ -345,7 +345,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
       // 创建成功后，统一用 agentsUpdate 设置 name + model + emoji + avatar
       const trimmedDisplayName = displayName.trim();
       await client.agentsUpdate({
-        id: result.id,
+        agentId: result.id,
         name: trimmedDisplayName || normalizedId,
         model: model.trim(),
         emoji: emoji.trim() || undefined,
@@ -385,7 +385,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     try {
       // 使用 agents.update RPC - 不传递 workspace
       await client.agentsUpdate({
-        id: editingAgent.id,
+        agentId: editingAgent.id,
         name: displayName.trim() || undefined,
         model: model.trim(),
         emoji: emoji.trim() || undefined,
