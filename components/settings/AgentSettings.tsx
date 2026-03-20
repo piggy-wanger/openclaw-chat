@@ -520,22 +520,13 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
                     </div>
                     <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
                       <span className="font-mono">{agent.id}</span>
-                      <span>·</span>
-                      <span>{agent.model}</span>
+                      {agent.model && (
+                        <>
+                          <span>·</span>
+                          <span>{agent.model}</span>
+                        </>
+                      )}
                     </div>
-                    {agent.workspace && (
-                      <Tooltip>
-                        <TooltipTrigger className="flex items-center gap-1 mt-1 text-xs text-muted-foreground cursor-default">
-                          <FolderOpen className="w-3 h-3 flex-shrink-0" />
-                          <span className="truncate max-w-[200px]">
-                            {agent.workspace}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">
-                          {agent.workspace}
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
                   </div>
 
                   {/* Actions */}
