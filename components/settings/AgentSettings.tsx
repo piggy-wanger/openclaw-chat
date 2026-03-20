@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Star, FolderOpen, Upload, X, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Star, FolderOpen, Upload, X, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -49,6 +49,31 @@ type AgentSettingsProps = {
   gatewayStatus: GatewayStatus;
 };
 
+// ID 验证正则：小写字母、数字、连字符，不能以连字符开头/结尾
+const VALID_ID_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+
+// normalizeAgentId 逻辑（与 openclaw 核心一致）
+function normalizeAgentId(value: string): string {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) return "main";
+  if (VALID_ID_RE.test(trimmed)) return trimmed.toLowerCase();
+  return (
+    trimmed
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/^-+/, "")
+      .replace(/-+$/, "")
+      .slice(0, 64) || "main"
+  );
+}
+
+// 验证 ID 是否有效（不包含 "main" 保留字检查）
+function isValidIdFormat(id: string): boolean {
+  const trimmed = id.trim();
+  if (!trimmed) return false;
+  return VALID_ID_RE.test(trimmed.toLowerCase());
+}
+
 export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -66,13 +91,21 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
 
   // Form state
   const [formData, setFormData] = useState({
-    id: "",
-    name: "",
+    id: "",           // Agent ID (只用于创建时输入，编辑时只读)
+    displayName: "",  // 显示名称 (identity.name)
     emoji: "",
     avatar: "",
     model: "",
     workspace: "",
   });
+
+  // ID 输入预览状态
+  const [idPreview, setIdPreview] = useState<string>("");
+  const [idValidation, setIdValidation] = useState<{
+    isValid: boolean;
+    isReserved: boolean;
+    willChange: boolean;
+  }>({ isValid: false, isReserved: false, willChange: false });
 
   // File input ref for avatar upload
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -214,12 +247,27 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
   const resetForm = useCallback(() => {
     setFormData({
       id: "",
-      name: "",
+      displayName: "",
       emoji: "",
       avatar: "",
       model: "",
       workspace: "",
     });
+    setIdPreview("");
+    setIdValidation({ isValid: false, isReserved: false, willChange: false });
+  }, []);
+
+  // 处理 ID 输入变化
+  const handleIdChange = useCallback((value: string) => {
+    setFormData((prev) => ({ ...prev, id: value }));
+    const normalized = normalizeAgentId(value);
+    const trimmed = value.trim();
+    const isValid = isValidIdFormat(trimmed);
+    const isReserved = normalized === "main";
+    const willChange = Boolean(trimmed && normalized !== trimmed.toLowerCase());
+
+    setIdPreview(normalized);
+    setIdValidation({ isValid, isReserved, willChange });
   }, []);
 
   // 打开添加对话框
@@ -233,7 +281,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     setEditingAgent(agent);
     setFormData({
       id: agent.id,
-      name: agent.identity?.name || "",
+      displayName: agent.identity?.name || "",
       emoji: agent.identity?.emoji || "",
       avatar: agent.identity?.avatar || "",
       model: agent.model,
@@ -252,14 +300,25 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
   const handleAddAgent = useCallback(async () => {
     if (!client) return;
 
-    const { name, emoji, model, workspace } = formData;
+    const { id, displayName, emoji, model, workspace } = formData;
 
-    if (!name.trim()) {
-      toast.error("请输入智能体名称");
+    // 验证 ID
+    const trimmedId = id.trim();
+    if (!trimmedId) {
+      toast.error("请输入智能体 ID");
+      return;
+    }
+    if (!isValidIdFormat(trimmedId)) {
+      toast.error("ID 格式无效：仅支持小写字母、数字、连字符，且不能以连字符开头/结尾");
+      return;
+    }
+    const normalizedId = normalizeAgentId(trimmedId);
+    if (normalizedId === "main") {
+      toast.error("不能使用保留字 'main' 作为 ID");
       return;
     }
     if (!model.trim()) {
-      toast.error("请输入模型 ID");
+      toast.error("请选择模型");
       return;
     }
     // Validate avatar URL if provided
@@ -270,14 +329,26 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
 
     setSaving(true);
     try {
-      // 使用 agents.create RPC
-      await client.agentsCreate({
-        name: name.trim(),
+      // 使用 agents.create RPC - name 参数会成为智能体的 ID
+      const result = await client.agentsCreate({
+        name: normalizedId,
         model: model.trim(),
         workspace: workspace.trim() || undefined,
         emoji: emoji.trim() || undefined,
         avatar: formData.avatar || undefined,
       });
+
+      // 如果提供了显示名称且与 ID 不同，需要更新
+      const trimmedDisplayName = displayName.trim();
+      if (trimmedDisplayName && trimmedDisplayName !== normalizedId) {
+        await client.agentsUpdate({
+          id: result.id,
+          name: trimmedDisplayName,
+          emoji: emoji.trim() || undefined,
+          avatar: formData.avatar || undefined,
+          model: model.trim(),
+        });
+      }
 
       toast.success("智能体添加成功");
       setShowAddDialog(false);
@@ -289,20 +360,17 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     } finally {
       setSaving(false);
     }
-  }, [client, formData, loadAgents, resetForm]);
+  }, [client, formData, loadAgents, resetForm, validateAvatarUrl]);
 
   // 编辑智能体
   const handleEditAgent = useCallback(async () => {
     if (!client || !editingAgent) return;
 
-    const { name, emoji, model, workspace } = formData;
+    const { displayName, emoji, model } = formData;
 
-    if (!name.trim()) {
-      toast.error("请输入智能体名称");
-      return;
-    }
+    // 显示名称可以为空（此时会使用 ID 作为显示名称）
     if (!model.trim()) {
-      toast.error("请输入模型 ID");
+      toast.error("请选择模型");
       return;
     }
     // Validate avatar URL if provided
@@ -313,12 +381,11 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
 
     setSaving(true);
     try {
-      // 使用 agents.update RPC
+      // 使用 agents.update RPC - 不传递 workspace
       await client.agentsUpdate({
         id: editingAgent.id,
-        name: name.trim(),
+        name: displayName.trim() || undefined,
         model: model.trim(),
-        workspace: workspace.trim() || undefined,
         emoji: emoji.trim() || undefined,
         avatar: formData.avatar || undefined,
       });
@@ -334,7 +401,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     } finally {
       setSaving(false);
     }
-  }, [client, editingAgent, formData, loadAgents, resetForm]);
+  }, [client, editingAgent, formData, loadAgents, resetForm, validateAvatarUrl]);
 
   // 删除智能体
   const handleDeleteAgent = useCallback(async () => {
@@ -440,7 +507,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-foreground truncate">
-                        {agent.identity?.name}
+                        {agent.identity?.name || agent.id}
                       </span>
                       {isDefault && (
                         <span className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded bg-primary/20 text-primary">
@@ -507,20 +574,68 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {/* 智能体 ID */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
-                名称 <span className="text-destructive">*</span>
+                智能体 ID <span className="text-destructive">*</span>
               </label>
               <Input
-                value={formData.name}
+                value={formData.id}
+                onChange={(e) => handleIdChange(e.target.value)}
+                placeholder="my-agent"
+                className={`bg-muted border-border text-foreground font-mono ${
+                  formData.id && !idValidation.isValid
+                    ? "border-destructive focus-visible:ring-destructive"
+                    : ""
+                }`}
+              />
+              {/* ID 验证反馈 */}
+              {formData.id && (
+                <div className="space-y-1">
+                  {/* 预览 normalize 结果 */}
+                  <div className="flex items-center gap-1.5 text-xs">
+                    {idValidation.isValid && !idValidation.isReserved ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                    ) : (
+                      <AlertCircle className="w-3.5 h-3.5 text-destructive" />
+                    )}
+                    <span className="text-muted-foreground">
+                      ID: <span className="font-mono text-foreground">{idPreview}</span>
+                    </span>
+                  </div>
+                  {/* 错误信息 */}
+                  {!idValidation.isValid && formData.id.trim() && (
+                    <p className="text-xs text-destructive">
+                      格式无效：仅支持小写字母、数字、连字符，且不能以连字符开头/结尾
+                    </p>
+                  )}
+                  {idValidation.isReserved && (
+                    <p className="text-xs text-destructive">
+                      不能使用保留字 &quot;main&quot;
+                    </p>
+                  )}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                小写字母、数字、连字符，最长64字符
+              </p>
+            </div>
+
+            {/* 显示名称 */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                显示名称
+              </label>
+              <Input
+                value={formData.displayName}
                 onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, name: e.target.value }))
+                  setFormData((prev) => ({ ...prev, displayName: e.target.value }))
                 }
-                placeholder="我的智能体"
+                placeholder="可选，用于界面显示的友好名称"
                 className="bg-muted border-border text-foreground"
               />
               <p className="text-xs text-muted-foreground">
-                智能体 ID 将根据名称自动生成
+                留空则使用 ID 作为显示名称
               </p>
             </div>
 
@@ -701,7 +816,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
           <DialogHeader>
             <DialogTitle className="text-foreground">编辑智能体</DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              修改智能体 &ldquo;{editingAgent?.identity?.name}&rdquo; 的配置
+              修改智能体配置
             </DialogDescription>
           </DialogHeader>
 
@@ -709,21 +824,25 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
             {/* 只读 ID 显示 */}
             <div className="px-3 py-2 bg-muted/50 rounded-md border border-border">
               <span className="text-xs text-muted-foreground">ID: </span>
-              <span className="text-sm font-mono text-foreground">{formData.id}</span>
+              <span className="text-xs font-mono text-muted-foreground">{formData.id}</span>
             </div>
 
+            {/* 显示名称 */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
-                名称 <span className="text-destructive">*</span>
+                显示名称
               </label>
               <Input
-                value={formData.name}
+                value={formData.displayName}
                 onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, name: e.target.value }))
+                  setFormData((prev) => ({ ...prev, displayName: e.target.value }))
                 }
-                placeholder="我的智能体"
+                placeholder="可选，用于界面显示的友好名称"
                 className="bg-muted border-border text-foreground"
               />
+              <p className="text-xs text-muted-foreground">
+                留空则使用 ID 作为显示名称
+              </p>
             </div>
 
             {/* 头像上传 */}
@@ -861,17 +980,15 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
             </div>
 
             {/* 只读工作目录显示 */}
-            {formData.workspace && (
-              <div className="px-3 py-2 bg-muted/50 rounded-md border border-border">
-                <div className="flex items-center gap-2">
-                  <FolderOpen className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                  <span className="text-xs text-muted-foreground">工作目录: </span>
-                  <span className="text-xs font-mono text-foreground truncate">
-                    {formData.workspace}
-                  </span>
-                </div>
+            <div className="px-3 py-2 bg-muted/50 rounded-md border border-border">
+              <div className="flex items-center gap-2">
+                <FolderOpen className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                <span className="text-xs text-muted-foreground">工作目录: </span>
+                <span className="text-xs font-mono text-muted-foreground truncate">
+                  {formData.workspace || "（默认）"}
+                </span>
               </div>
-            )}
+            </div>
           </div>
 
           <DialogFooter>
@@ -900,7 +1017,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
           <DialogHeader>
             <DialogTitle className="text-foreground">确认删除智能体</DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              确定要删除智能体 &ldquo;{deletingAgent?.identity?.name}&rdquo; ({deletingAgent?.id})
+              确定要删除智能体 &ldquo;{deletingAgent?.identity?.name || deletingAgent?.id}&rdquo; ({deletingAgent?.id})
               吗？此操作无法撤销。
             </DialogDescription>
           </DialogHeader>
