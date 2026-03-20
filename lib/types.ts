@@ -3,7 +3,7 @@
 export type Session = {
   id: string;
   title: string;
-  type: string;
+  type: "direct" | "group";
   model: string;
   createdAt: number;
   updatedAt: number;
@@ -38,7 +38,7 @@ export type GroupMember = {
   name: string;
   emoji?: string | null;
   sessionKey?: string | null;
-  role: string;
+  role: "member" | "admin";
   order: number;
   createdAt: number;
 };
@@ -46,11 +46,11 @@ export type GroupMember = {
 export type GroupMessage = {
   id: string;
   groupId: string;
-  senderType: string;
+  senderType: "user" | "agent";
   senderId?: string | null;
   senderName?: string | null;
   senderEmoji?: string | null;
-  role: string;
+  role: "user" | "assistant";
   content: string;
   runId?: string | null;
   toolCalls?: string | null;

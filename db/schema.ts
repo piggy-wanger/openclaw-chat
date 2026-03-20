@@ -6,7 +6,7 @@ import { nanoid } from "nanoid";
 export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey().$defaultFn(() => nanoid()),
   title: text("title").notNull(),
-  type: text("type").notNull().default("direct"), // "direct" | "group"
+  type: text("type").notNull().$type<"direct" | "group">().default("direct"),
   model: text("model").notNull().default("claude-sonnet-4-6"),
   createdAt: integer("created_at").notNull().$defaultFn(() => Date.now()),
   updatedAt: integer("updated_at").notNull().$defaultFn(() => Date.now()),
@@ -51,7 +51,7 @@ export const groupMembers = sqliteTable(
     name: text("name").notNull(),
     emoji: text("emoji"),
     sessionKey: text("session_key"),
-    role: text("role").notNull().default("member"),
+    role: text("role").notNull().$type<"member" | "admin">().default("member"),
     order: integer("order").notNull().default(0),
     createdAt: integer("created_at").notNull().$defaultFn(() => Date.now()),
   },
@@ -69,11 +69,11 @@ export const groupMessages = sqliteTable("group_messages", {
   groupId: text("group_id")
     .notNull()
     .references(() => groups.id, { onDelete: "cascade" }),
-  senderType: text("sender_type").notNull(),
+  senderType: text("sender_type").notNull().$type<"user" | "agent">(),
   senderId: text("sender_id"),
   senderName: text("sender_name"),
   senderEmoji: text("sender_emoji"),
-  role: text("role").notNull(),
+  role: text("role").notNull().$type<"user" | "assistant">(),
   content: text("content").notNull(),
   runId: text("run_id"),
   toolCalls: text("tool_calls"),
