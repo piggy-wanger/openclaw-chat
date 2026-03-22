@@ -21,6 +21,9 @@ type GroupMessageListProps = {
   members: GroupMember[];
   membersOnline: Map<string, boolean>;
   loading?: boolean;
+  hasMoreMessages?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
 };
 
 function StreamingCursor() {
@@ -50,9 +53,13 @@ function GroupMessageListInner({
   members,
   membersOnline,
   loading,
+  hasMoreMessages = false,
+  isLoadingMore = false,
+  onLoadMore,
 }: GroupMessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const topSentinelRef = useRef<HTMLDivElement>(null);
   const hasMountedRef = useRef(false);
   const shouldAutoScrollRef = useRef(true);
   const prevMessageCountRef = useRef(0);
@@ -126,6 +133,29 @@ function GroupMessageListInner({
   }, []);
 
   useEffect(() => {
+    if (!hasMoreMessages || isLoadingMore || !onLoadMore) return;
+    const viewport = viewportRef.current;
+    const sentinel = topSentinelRef.current;
+    if (!viewport || !sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry?.isIntersecting) {
+          onLoadMore();
+        }
+      },
+      {
+        root: viewport,
+        threshold: 0.1,
+      }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreMessages, isLoadingMore, onLoadMore, messages.length]);
+
+  useEffect(() => {
     if (messages.length > 0 && prevMessageCountRef.current === 0) {
       requestAnimationFrame(() => {
         if (viewportRef.current) {
@@ -170,6 +200,17 @@ function GroupMessageListInner({
   return (
     <ScrollArea className="flex-1 h-full" viewportRef={viewportRef}>
       <div className="px-4 py-6 md:px-8">
+        <div ref={topSentinelRef} className="h-1" />
+        {(hasMoreMessages || isLoadingMore) && (
+          <div className="flex items-center justify-center py-2">
+            {isLoadingMore ? (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            ) : (
+              <span className="text-xs text-muted-foreground">向上滚动加载更多</span>
+            )}
+          </div>
+        )}
+
         {messages.map((message) => (
           <GroupMessageItem
             key={message.id}

@@ -27,10 +27,12 @@ type GroupChatContextType = {
   membersOnline: Map<string, boolean>;
   messages: GroupMessage[];
   loading: boolean;
+  hasMoreMessages: boolean;
+  isLoadingMore: boolean;
   streamingMap: Map<string, StreamingState>;
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, mentionedAgentIds?: string[]) => Promise<void>;
   abortStream: (agentId?: string) => Promise<void>;
-  fetchMessages: () => Promise<void>;
+  fetchMessages: (opts?: { loadMore?: boolean }) => Promise<void>;
   fetchGroupData: () => Promise<void>;
 };
 
@@ -44,6 +46,11 @@ type GroupMembersResponse = {
 
 type GroupMessagesResponse = {
   messages: GroupMessage[];
+  pagination?: {
+    limit: number;
+    hasMore: boolean;
+    nextBefore: string | null;
+  };
 };
 
 const GroupChatContext = createContext<GroupChatContextType | null>(null);
@@ -89,6 +96,8 @@ export function GroupChatProvider({
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [streamingMap, setStreamingMap] = useState<Map<string, StreamingState>>(new Map());
   const membersOnline = useMemo(
     () => new Map(members.map((member) => [member.agentId, true])),
@@ -96,6 +105,7 @@ export function GroupChatProvider({
   );
 
   const membersRef = useRef<GroupMember[]>([]);
+  const messagesRef = useRef<GroupMessage[]>([]);
   const streamingMapRef = useRef<Map<string, StreamingState>>(new Map());
   const agentToSessionKeyRef = useRef<Map<string, string>>(new Map());
   const sessionKeyToAgentRef = useRef<Map<string, string>>(new Map());
@@ -115,19 +125,49 @@ export function GroupChatProvider({
     []
   );
 
-  const fetchMessages = useCallback(async () => {
+  const fetchMessages = useCallback(async (opts?: { loadMore?: boolean }) => {
     if (!groupId) return;
+    const loadMore = Boolean(opts?.loadMore);
+    if (loadMore && isLoadingMore) return;
+
+    const params = new URLSearchParams();
+    params.set("limit", "50");
+
+    if (loadMore) {
+      const oldest = messagesRef.current[0];
+      if (!oldest) return;
+      params.set("before", `${oldest.createdAt}:${oldest.id}`);
+      setIsLoadingMore(true);
+    }
 
     try {
-      const res = await fetch(`/api/groups/${groupId}/messages`, { cache: "no-store" });
+      const res = await fetch(`/api/groups/${groupId}/messages?${params.toString()}`, {
+        cache: "no-store",
+      });
       if (!res.ok) return;
 
       const data = (await res.json()) as GroupMessagesResponse;
-      setMessages(Array.isArray(data.messages) ? data.messages : []);
+      const pageMessages = Array.isArray(data.messages) ? data.messages : [];
+
+      if (loadMore) {
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((message) => message.id));
+          const olderMessages = pageMessages.filter((message) => !existingIds.has(message.id));
+          return [...olderMessages, ...prev];
+        });
+      } else {
+        setMessages(pageMessages);
+      }
+
+      setHasMoreMessages(Boolean(data.pagination?.hasMore));
     } catch (err) {
       console.error("[GroupChat] Failed to fetch messages:", err);
+    } finally {
+      if (loadMore) {
+        setIsLoadingMore(false);
+      }
     }
-  }, [groupId]);
+  }, [groupId, isLoadingMore]);
 
   const fetchGroupData = useCallback(async () => {
     const currentEpoch = ++groupFetchEpochRef.current;
@@ -139,6 +179,8 @@ export function GroupChatProvider({
       setGroup(null);
       setMembers([]);
       setMessages([]);
+      setHasMoreMessages(false);
+      setIsLoadingMore(false);
       setLoading(false);
       return;
     }
@@ -166,6 +208,7 @@ export function GroupChatProvider({
       setMembers(memberList);
       membersRef.current = memberList;
       setMessages(Array.isArray(messagesData.messages) ? messagesData.messages : []);
+      setHasMoreMessages(Boolean(messagesData.pagination?.hasMore));
     } catch (err) {
       if (currentEpoch !== groupFetchEpochRef.current) return;
       if (err instanceof DOMException && err.name === "AbortError") return;
@@ -173,6 +216,7 @@ export function GroupChatProvider({
       setGroup(null);
       setMembers([]);
       setMessages([]);
+      setHasMoreMessages(false);
     } finally {
       if (currentEpoch === groupFetchEpochRef.current) {
         setLoading(false);
@@ -271,7 +315,7 @@ export function GroupChatProvider({
   );
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, mentionedAgentIds?: string[]) => {
       if (!groupId || !isConnected) return;
       const trimmed = content.trim();
       if (!trimmed) return;
@@ -296,14 +340,32 @@ export function GroupChatProvider({
       const memberList = [...membersRef.current];
       if (memberList.length === 0) return;
 
+      const targetAgentIdSet = new Set(
+        (mentionedAgentIds ?? [])
+          .map((agentId) => agentId.trim())
+          .filter(Boolean)
+      );
+      const targetMembers =
+        targetAgentIdSet.size > 0
+          ? memberList.filter((member) => targetAgentIdSet.has(member.agentId))
+          : memberList;
+      if (targetMembers.length === 0) return;
+
+      // G3.2 预留：Agent 间上下文共享
+      // 可选方案：发送消息时拼接前几条 Agent 回复作为上下文
+      // const recentReplies = messages.filter(m => m.senderType === "agent").slice(-N);
+      // const contextContent = recentReplies.map(r => `[${r.senderName}]: ${r.content}`).join("\n");
+      // finalMessage = contextContent + "\n---\n" + content;
+      const finalMessage = trimmed;
+
       await Promise.all(
-        memberList.map(async (member) => {
+        targetMembers.map(async (member) => {
           const sessionKey = buildMemberSessionKey(member, groupId);
 
           try {
             const result = await client.chatSend({
               sessionKey,
-              message: trimmed,
+              message: finalMessage,
             });
 
             agentToSessionKeyRef.current.set(member.agentId, sessionKey);
@@ -334,6 +396,10 @@ export function GroupChatProvider({
   useEffect(() => {
     membersRef.current = members;
   }, [members]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     const handleChat = (event: ChatEvent) => {
@@ -434,6 +500,8 @@ export function GroupChatProvider({
     sessionKeyToAgentRef.current.clear();
     toolCallsRef.current.clear();
     completedRunsRef.current.clear();
+    setHasMoreMessages(false);
+    setIsLoadingMore(false);
     groupFetchAbortRef.current?.abort();
 
     return () => {
@@ -443,6 +511,8 @@ export function GroupChatProvider({
       sessionKeyToAgentRef.current.clear();
       toolCallsRef.current.clear();
       completedRunsRef.current.clear();
+      setHasMoreMessages(false);
+      setIsLoadingMore(false);
       groupFetchAbortRef.current?.abort();
       groupFetchAbortRef.current = null;
     };
@@ -455,6 +525,8 @@ export function GroupChatProvider({
       membersOnline,
       messages,
       loading,
+      hasMoreMessages,
+      isLoadingMore,
       streamingMap,
       sendMessage,
       abortStream,
@@ -466,6 +538,8 @@ export function GroupChatProvider({
       fetchGroupData,
       fetchMessages,
       group,
+      hasMoreMessages,
+      isLoadingMore,
       loading,
       members,
       membersOnline,

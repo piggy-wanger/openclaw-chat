@@ -428,6 +428,9 @@ function GroupChatArea({
     members,
     membersOnline,
     streamingMap,
+    hasMoreMessages,
+    isLoadingMore,
+    fetchMessages,
     fetchGroupData,
   } = useGroupChat();
 
@@ -589,7 +592,12 @@ function GroupChatArea({
                     members={members}
                     membersOnline={membersOnline}
                     streamingMap={streamingMap}
-                    loading={false}
+                    loading={messageLoading && messages.length === 0}
+                    hasMoreMessages={hasMoreMessages}
+                    isLoadingMore={isLoadingMore}
+                    onLoadMore={() => {
+                      void fetchMessages({ loadMore: true });
+                    }}
                   />
                 </div>
               )}
@@ -597,6 +605,9 @@ function GroupChatArea({
               <InputArea
                 onSend={(content) => {
                   void sendMessage(content);
+                }}
+                onSendWithMentions={(content, mentionedAgentIds) => {
+                  void sendMessage(content, mentionedAgentIds);
                 }}
                 isStreaming={isStreaming}
                 onAbort={() => {
