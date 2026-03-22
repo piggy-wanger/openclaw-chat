@@ -24,12 +24,14 @@ type StreamingState = {
 type GroupChatContextType = {
   group: Group | null;
   members: GroupMember[];
+  membersOnline: Map<string, boolean>;
   messages: GroupMessage[];
   loading: boolean;
   streamingMap: Map<string, StreamingState>;
   sendMessage: (content: string) => Promise<void>;
   abortStream: (agentId?: string) => Promise<void>;
   fetchMessages: () => Promise<void>;
+  fetchGroupData: () => Promise<void>;
 };
 
 type GroupDetailResponse = {
@@ -88,6 +90,10 @@ export function GroupChatProvider({
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [streamingMap, setStreamingMap] = useState<Map<string, StreamingState>>(new Map());
+  const membersOnline = useMemo(
+    () => new Map(members.map((member) => [member.agentId, true])),
+    [members]
+  );
 
   const membersRef = useRef<GroupMember[]>([]);
   const streamingMapRef = useRef<Map<string, StreamingState>>(new Map());
@@ -446,14 +452,27 @@ export function GroupChatProvider({
     () => ({
       group,
       members,
+      membersOnline,
       messages,
       loading,
       streamingMap,
       sendMessage,
       abortStream,
       fetchMessages,
+      fetchGroupData,
     }),
-    [abortStream, fetchMessages, group, loading, members, messages, sendMessage, streamingMap]
+    [
+      abortStream,
+      fetchGroupData,
+      fetchMessages,
+      group,
+      loading,
+      members,
+      membersOnline,
+      messages,
+      sendMessage,
+      streamingMap,
+    ]
   );
 
   return <GroupChatContext.Provider value={value}>{children}</GroupChatContext.Provider>;

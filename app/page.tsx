@@ -411,6 +411,7 @@ function GroupChatArea({
     currentSessionId,
     currentSession,
     loading: sessionLoading,
+    fetchSessions,
     createSession,
     createSessionWithOptions,
     createGroupSession,
@@ -425,7 +426,9 @@ function GroupChatArea({
     sendMessage,
     abortStream,
     members,
+    membersOnline,
     streamingMap,
+    fetchGroupData,
   } = useGroupChat();
 
   const sidebarRef = useRef<SidebarRef>(null);
@@ -503,6 +506,11 @@ function GroupChatArea({
     setSidebarOpen(!sidebarOpen);
   };
 
+  const handleGroupUpdated = useCallback(() => {
+    void fetchGroupData();
+    void fetchSessions();
+  }, [fetchGroupData, fetchSessions]);
+
   const groupAgents = useMemo(
     () =>
       members.map((member) => ({
@@ -563,6 +571,8 @@ function GroupChatArea({
           isGroup
           groupName={group?.name || currentSession?.title}
           groupMembers={members}
+          onGroupUpdated={handleGroupUpdated}
+          onGroupDeleted={() => selectSession(null)}
         />
 
         <div className="flex-1 flex flex-col overflow-hidden bg-background relative">
@@ -577,6 +587,7 @@ function GroupChatArea({
                   <GroupMessageList
                     messages={messages}
                     members={members}
+                    membersOnline={membersOnline}
                     streamingMap={streamingMap}
                     loading={false}
                   />

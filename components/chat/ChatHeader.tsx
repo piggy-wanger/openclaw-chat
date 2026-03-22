@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { PanelLeft, PanelLeftClose, Loader2 } from "lucide-react";
+import { PanelLeft, PanelLeftClose, Loader2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { GroupSettingsDialog } from "@/components/dialogs/GroupSettingsDialog";
 import { useGateway, type GatewayStatus } from "@/hooks/useGateway";
 import { useSettings } from "@/hooks/useSettings";
 import type { GroupMember, Session } from "@/lib/types";
@@ -59,6 +60,8 @@ interface ChatHeaderProps {
   isGroup?: boolean;
   groupName?: string;
   groupMembers?: GroupMember[];
+  onGroupUpdated?: () => void;
+  onGroupDeleted?: () => void;
 }
 
 export function ChatHeader({
@@ -70,11 +73,14 @@ export function ChatHeader({
   isGroup = false,
   groupName,
   groupMembers = [],
+  onGroupUpdated,
+  onGroupDeleted,
 }: ChatHeaderProps) {
   const { status, client, isConnected } = useGateway();
   const { settings } = useSettings();
   const [models, setModels] = useState<GatewayModel[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
+  const [showGroupSettings, setShowGroupSettings] = useState(false);
 
   useEffect(() => {
     if (!isConnected) {
@@ -199,6 +205,17 @@ export function ChatHeader({
               群聊
             </Badge>
           )}
+          {isGroup && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowGroupSettings(true)}
+              aria-label="群组设置"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          )}
           <Select value={currentModel} onValueChange={onModelChange}>
             <SelectTrigger className="w-[180px] bg-muted border-border text-foreground">
               <SelectValue placeholder="选择模型" />
@@ -227,6 +244,14 @@ export function ChatHeader({
           </Select>
         </div>
       )}
+
+      <GroupSettingsDialog
+        open={showGroupSettings}
+        onOpenChange={setShowGroupSettings}
+        groupId={currentSession?.groupId ?? null}
+        onGroupUpdated={onGroupUpdated}
+        onGroupDeleted={onGroupDeleted}
+      />
     </header>
   );
 }

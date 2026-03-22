@@ -11,6 +11,7 @@ import type { GroupMessage, ToolCall, ToolCallStatus } from "@/lib/types";
 
 type GroupMessageItemProps = {
   message: GroupMessage;
+  isOnline?: boolean;
 };
 
 function parseToolCalls(raw: string | null | undefined): ToolCall[] {
@@ -101,7 +102,7 @@ function parseToolCalls(raw: string | null | undefined): ToolCall[] {
   }
 }
 
-function GroupMessageItemInner({ message }: GroupMessageItemProps) {
+function GroupMessageItemInner({ message, isOnline = true }: GroupMessageItemProps) {
   const timestamp = format(new Date(message.createdAt), "HH:mm");
 
   const senderKey = message.senderId || message.senderName || "agent";
@@ -138,6 +139,12 @@ function GroupMessageItemInner({ message }: GroupMessageItemProps) {
               )}
             </AvatarFallback>
           </Avatar>
+          {isOnline && (
+            <span
+              className="w-2 h-2 rounded-full bg-chart-2 -ml-2.5 border border-background shrink-0"
+              title="在线"
+            />
+          )}
           <span className="text-sm font-medium" style={{ color: senderNameColor }}>
             {message.senderName || message.senderId || "Agent"}
           </span>

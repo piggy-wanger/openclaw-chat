@@ -19,6 +19,7 @@ type GroupMessageListProps = {
   messages: GroupMessage[];
   streamingMap: Map<string, StreamingState>;
   members: GroupMember[];
+  membersOnline: Map<string, boolean>;
   loading?: boolean;
 };
 
@@ -47,6 +48,7 @@ function GroupMessageListInner({
   messages,
   streamingMap,
   members,
+  membersOnline,
   loading,
 }: GroupMessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -169,7 +171,11 @@ function GroupMessageListInner({
     <ScrollArea className="flex-1 h-full" viewportRef={viewportRef}>
       <div className="px-4 py-6 md:px-8">
         {messages.map((message) => (
-          <GroupMessageItem key={message.id} message={message} />
+          <GroupMessageItem
+            key={message.id}
+            message={message}
+            isOnline={message.senderId ? (membersOnline.get(message.senderId) ?? true) : true}
+          />
         ))}
 
         {streamingAgents.map((agent) => (
