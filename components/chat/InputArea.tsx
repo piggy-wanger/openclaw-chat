@@ -158,8 +158,8 @@ function InputAreaInner({
 
         for (const agent of normalizedAgents) {
           if (
-            agent.normalizedName.includes(normalizedMention) ||
-            normalizedMention.includes(agent.normalizedName)
+            agent.normalizedName === normalizedMention ||
+            agent.normalizedName.startsWith(normalizedMention)
           ) {
             uniqueIds.add(agent.id);
           }

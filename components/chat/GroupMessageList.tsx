@@ -132,8 +132,10 @@ function GroupMessageListInner({
     return () => viewport.removeEventListener("scroll", handleScroll);
   }, []);
 
+  const loadingMoreRef = useRef(false);
+
   useEffect(() => {
-    if (!hasMoreMessages || isLoadingMore || !onLoadMore) return;
+    if (!hasMoreMessages || loadingMoreRef.current || !onLoadMore) return;
     const viewport = viewportRef.current;
     const sentinel = topSentinelRef.current;
     if (!viewport || !sentinel) return;
@@ -141,8 +143,11 @@ function GroupMessageListInner({
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries[0];
-        if (entry?.isIntersecting) {
+        if (entry?.isIntersecting && !loadingMoreRef.current) {
+          loadingMoreRef.current = true;
           onLoadMore();
+          // Reset after a delay to prevent rapid re-triggers; useGroupChat manages isLoadingMore
+          setTimeout(() => { loadingMoreRef.current = false; }, 1000);
         }
       },
       {
