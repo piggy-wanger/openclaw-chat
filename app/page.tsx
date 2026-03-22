@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useGateway } from "@/hooks/useGateway";
 import { SessionProvider, useSession } from "@/hooks/useSession";
 import { ChatProvider, useChat } from "@/hooks/useChat";
+import { GroupChatProvider, useGroupChat } from "@/hooks/useGroupChat";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { Sidebar, type SidebarRef } from "@/components/sidebar/Sidebar";
 import { ChatHeader } from "@/components/chat/ChatHeader";
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import type { Message, Session } from "@/lib/types";
 
 // 消息列表骨架屏
 function MessageListSkeleton() {
@@ -407,6 +409,247 @@ function ChatArea({
   );
 }
 
+function resolveGroupIdFromSession(session: Session | null): string | null {
+  if (!session) return null;
+  const withGroupMeta = session as Session & { groupId?: string; agentId?: string };
+  return withGroupMeta.groupId ?? withGroupMeta.agentId ?? session.id;
+}
+
+function GroupChatArea({
+  isMobile,
+  sidebarOpen,
+  setSidebarOpen,
+}: {
+  isMobile: boolean;
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
+}) {
+  const { client, isConnected } = useGateway();
+  const {
+    sessions,
+    currentSessionId,
+    currentSession,
+    loading: sessionLoading,
+    createSession,
+    createSessionWithOptions,
+    createGroupSession,
+    updateSession,
+    deleteSession,
+    selectSession,
+  } = useSession();
+  const { messages, loading: messageLoading, sendMessage, abortStream, members, streamingMap } = useGroupChat();
+
+  const sidebarRef = useRef<SidebarRef>(null);
+
+  useKeyboardShortcuts({
+    onFocusSearch: useCallback(() => {
+      sidebarRef.current?.focusSearch();
+    }, []),
+    onNewSession: useCallback(async () => {
+      await createSession();
+      if (isMobile) {
+        setSidebarOpen(false);
+      }
+    }, [createSession, isMobile, setSidebarOpen]),
+    onCloseModal: useCallback(() => {
+      if (isMobile && sidebarOpen) {
+        setSidebarOpen(false);
+      }
+    }, [isMobile, sidebarOpen, setSidebarOpen]),
+  });
+
+  const handleSelectSession = (id: string) => {
+    selectSession(id);
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+  };
+
+  const handleRenameSession = async (id: string, title: string) => {
+    await updateSession(id, { title });
+  };
+
+  const handleDeleteSession = async (id: string) => {
+    await deleteSession(id);
+  };
+
+  const handleCreateSessionWithOptions = async (options: {
+    sessionName: string;
+    agentId: string;
+    model: string;
+  }) => {
+    await createSessionWithOptions(options);
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+  };
+
+  const handleCreateGroup = async (options: {
+    groupName: string;
+    agentIds: string[];
+    model?: string;
+  }) => {
+    const groupSession = await createGroupSession(options);
+    if (!groupSession) {
+      toast.error("创建群组失败");
+      return;
+    }
+
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+
+    toast.success(`群组 "${options.groupName}" 创建成功`, {
+      description: `包含 ${options.agentIds.length} 个智能体`,
+    });
+  };
+
+  const handleModelChange = async (model: string | null) => {
+    if (currentSessionId && model) {
+      await updateSession(currentSessionId, { model });
+    }
+  };
+
+  const handleToggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
+  const formattedMessages = useMemo<Message[]>(() => {
+    return messages.map((message) => {
+      let content = message.content;
+      if (message.senderType === "agent") {
+        const prefixParts = [message.senderEmoji ?? "", message.senderName ?? message.senderId ?? "Agent"].filter(Boolean);
+        const prefix = prefixParts.length > 0 ? `[${prefixParts.join(" ")}] ` : "";
+        content = `${prefix}${message.content}`;
+      }
+
+      return {
+        id: message.id,
+        sessionId: message.groupId,
+        role: message.role,
+        content,
+        createdAt: message.createdAt,
+      };
+    });
+  }, [messages]);
+
+  const { isStreaming, streamContent } = useMemo(() => {
+    const chunks: string[] = [];
+    for (const member of members) {
+      const streamState = streamingMap.get(member.agentId);
+      if (!streamState?.isStreaming || !streamState.content) continue;
+      const prefix = `[${[member.emoji ?? "", member.name].filter(Boolean).join(" ")}] `;
+      chunks.push(`${prefix}${streamState.content}`);
+    }
+    return {
+      isStreaming: Array.from(streamingMap.values()).some((stream) => stream.isStreaming),
+      streamContent: chunks.join("\n\n"),
+    };
+  }, [members, streamingMap]);
+
+  const groupAgents = useMemo(
+    () =>
+      members.map((member) => ({
+        id: member.agentId,
+        name: member.name,
+        emoji: member.emoji ?? undefined,
+      })),
+    [members]
+  );
+
+  const sidebarContent = (
+    <Sidebar
+      ref={sidebarRef}
+      sessions={sessions}
+      currentSessionId={currentSessionId}
+      loading={sessionLoading}
+      client={client}
+      isConnected={isConnected}
+      onSelectSession={handleSelectSession}
+      onRenameSession={handleRenameSession}
+      onDeleteSession={handleDeleteSession}
+      onCreateSessionWithOptions={handleCreateSessionWithOptions}
+      onCreateGroup={handleCreateGroup}
+    />
+  );
+
+  return (
+    <>
+      {!isMobile && sidebarContent}
+
+      {isMobile && (
+        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+          <SheetContent
+            side="left"
+            className="p-0 w-[280px] bg-card border-r border-border"
+            showCloseButton={false}
+          >
+            <SheetHeader className="sr-only">
+              <SheetTitle>会话列表</SheetTitle>
+            </SheetHeader>
+            {sidebarContent}
+          </SheetContent>
+        </Sheet>
+      )}
+
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <ChatHeader
+          currentSession={currentSession}
+          onModelChange={handleModelChange}
+          onToggleSidebar={handleToggleSidebar}
+          isSidebarOpen={sidebarOpen}
+          isMobile={isMobile}
+        />
+
+        <div className="flex-1 flex flex-col overflow-hidden bg-background relative">
+          {currentSession ? (
+            <>
+              {formattedMessages.length === 0 && !isStreaming && !messageLoading ? (
+                <NoMessagesState />
+              ) : (
+                <div className="flex-1 overflow-hidden">
+                  <MessageList
+                    messages={formattedMessages}
+                    isStreaming={isStreaming}
+                    streamContent={streamContent}
+                    loading={messageLoading}
+                    isInitialLoad={formattedMessages.length === 0}
+                    toolCalls={[]}
+                  />
+                </div>
+              )}
+
+              <InputArea
+                onSend={(content) => {
+                  void sendMessage(content);
+                }}
+                isStreaming={isStreaming}
+                onAbort={() => {
+                  void abortStream();
+                }}
+                disabled={messageLoading}
+                isGroup
+                groupAgents={groupAgents}
+              />
+            </>
+          ) : sessionLoading ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                </div>
+                <span className="text-xs text-muted-foreground">加载会话...</span>
+              </div>
+            </div>
+          ) : (
+            <NoSessionState />
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // 会话和聊天组合组件（需要在 SessionProvider 内部，包裹 ChatProvider）
 function SessionAndChat({
   isMobile,
@@ -417,7 +660,20 @@ function SessionAndChat({
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
 }) {
-  const { currentSessionId, updateTempSessionId } = useSession();
+  const { currentSessionId, currentSession, updateTempSessionId } = useSession();
+
+  if (currentSession?.type === "group") {
+    const groupId = resolveGroupIdFromSession(currentSession);
+    return (
+      <GroupChatProvider groupId={groupId}>
+        <GroupChatArea
+          isMobile={isMobile}
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+        />
+      </GroupChatProvider>
+    );
+  }
 
   return (
     <ChatProvider
