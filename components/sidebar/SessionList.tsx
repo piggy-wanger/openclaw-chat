@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState, forwardRef } from "react";
+import { useEffect, useMemo, useState, forwardRef } from "react";
 import { Search, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { SessionItem } from "./SessionItem";
-import type { Session } from "@/lib/types";
+import type { GroupMember, Session } from "@/lib/types";
 
 interface SessionListProps {
   sessions: Session[];
@@ -29,6 +29,52 @@ export const SessionList = forwardRef<HTMLInputElement, SessionListProps>(
     searchInputRef
   ) {
     const [searchQuery, setSearchQuery] = useState("");
+    const [groupMembersMap, setGroupMembersMap] = useState<Record<string, GroupMember[]>>({});
+
+    useEffect(() => {
+      const groupIds = Array.from(
+        new Set(
+          sessions
+            .filter((session) => session.type === "group" && !!session.groupId)
+            .map((session) => session.groupId as string)
+        )
+      );
+
+      if (groupIds.length === 0) {
+        setGroupMembersMap({});
+        return;
+      }
+
+      let cancelled = false;
+
+      const fetchGroupMembers = async () => {
+        const entries = await Promise.all(
+          groupIds.map(async (groupId) => {
+            try {
+              const res = await fetch(`/api/groups/${groupId}/members`, {
+                cache: "no-store",
+              });
+              if (!res.ok) {
+                return [groupId, []] as const;
+              }
+              const data = (await res.json()) as { members?: GroupMember[] };
+              return [groupId, Array.isArray(data.members) ? data.members : []] as const;
+            } catch {
+              return [groupId, []] as const;
+            }
+          })
+        );
+
+        if (cancelled) return;
+        setGroupMembersMap(Object.fromEntries(entries));
+      };
+
+      void fetchGroupMembers();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [sessions]);
 
     // 根据搜索词过滤会话
     const filteredSessions = useMemo(() => {
@@ -95,6 +141,11 @@ export const SessionList = forwardRef<HTMLInputElement, SessionListProps>(
                       <SessionItem
                         key={session.id}
                         session={session}
+                        groupMembers={
+                          session.type === "group" && session.groupId
+                            ? groupMembersMap[session.groupId]
+                            : undefined
+                        }
                         isActive={currentSessionId === session.id}
                         onSelect={() => onSelectSession(session.id)}
                         onRename={(title) => onRenameSession(session.id, title)}
@@ -120,6 +171,9 @@ export const SessionList = forwardRef<HTMLInputElement, SessionListProps>(
                         <SessionItem
                           key={session.id}
                           session={session}
+                          groupMembers={
+                            session.groupId ? groupMembersMap[session.groupId] : undefined
+                          }
                           isActive={currentSessionId === session.id}
                           onSelect={() => onSelectSession(session.id)}
                           onRename={(title) =>

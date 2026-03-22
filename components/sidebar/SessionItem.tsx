@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { MoreVertical, Pencil, Trash2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarGroup } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogContent,
@@ -21,11 +23,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { Session } from "@/lib/types";
+import type { GroupMember, Session } from "@/lib/types";
 import { extractSessionDisplayName } from "@/hooks/useSession";
 
 interface SessionItemProps {
   session: Session;
+  groupMembers?: GroupMember[];
   isActive: boolean;
   onSelect: () => void;
   onRename: (title: string) => void;
@@ -34,6 +37,7 @@ interface SessionItemProps {
 
 export function SessionItem({
   session,
+  groupMembers = [],
   isActive,
   onSelect,
   onRename,
@@ -87,11 +91,36 @@ export function SessionItem({
           }
         }}
       >
+        {session.type === "group" && (
+          <div className="shrink-0">
+            {groupMembers.length > 0 ? (
+              <AvatarGroup className="*:data-[slot=avatar]:size-5 *:data-[slot=avatar]:text-[10px]">
+                {groupMembers.slice(0, 3).map((member) => (
+                  <Avatar key={member.id} size="sm" className="size-5">
+                    <AvatarFallback>{member.emoji || member.name.slice(0, 1)}</AvatarFallback>
+                  </Avatar>
+                ))}
+              </AvatarGroup>
+            ) : (
+              <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center">
+                <Users className="h-3 w-3 text-muted-foreground" />
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium truncate">
             {session.id.startsWith("temp-") ? session.title : extractSessionDisplayName(session.id)}
           </div>
-          <div className="text-xs text-muted-foreground">{relativeTime}</div>
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <span>{relativeTime}</span>
+            {session.type === "group" && (
+              <Badge variant="outline" className="h-4 px-1.5 text-[10px] leading-none">
+                {groupMembers.length}
+              </Badge>
+            )}
+          </div>
         </div>
         <div
           className={cn(
@@ -121,7 +150,6 @@ export function SessionItem({
         </div>
       </div>
 
-      {/* Rename Dialog */}
       <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
         <DialogContent>
           <DialogHeader>
@@ -146,7 +174,6 @@ export function SessionItem({
         </DialogContent>
       </Dialog>
 
-      {/* Delete Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent>
           <DialogHeader>

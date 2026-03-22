@@ -9,6 +9,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { Sidebar, type SidebarRef } from "@/components/sidebar/Sidebar";
 import { ChatHeader } from "@/components/chat/ChatHeader";
 import { MessageList } from "@/components/chat/MessageList";
+import { GroupMessageList } from "@/components/chat/GroupMessageList";
 import { InputArea } from "@/components/chat/InputArea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -24,9 +25,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
-import type { Message, Session } from "@/lib/types";
+import type { Session } from "@/lib/types";
 
-// 消息列表骨架屏
 function MessageListSkeleton() {
   return (
     <div className="flex-1 p-4 space-y-4">
@@ -47,7 +47,6 @@ function MessageListSkeleton() {
   );
 }
 
-// 空状态组件
 function NotConnectedState() {
   return (
     <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -92,7 +91,6 @@ function NoMessagesState() {
   );
 }
 
-// 连接状态指示器
 function ConnectionStatus() {
   const { status, error } = useGateway();
 
@@ -144,7 +142,6 @@ function ConnectionStatus() {
   );
 }
 
-// 主聊天区域（需要在 ChatProvider 内部）
 function ChatArea({
   isMobile,
   sidebarOpen,
@@ -185,7 +182,6 @@ function ChatArea({
   const sidebarRef = useRef<SidebarRef>(null);
   const prevErrorRef = useRef<string | null>(null);
 
-  // Error toast when error changes
   useEffect(() => {
     if (error && error !== prevErrorRef.current) {
       toast.error(error);
@@ -193,7 +189,6 @@ function ChatArea({
     prevErrorRef.current = error;
   }, [error]);
 
-  // Keyboard shortcuts
   useKeyboardShortcuts({
     onFocusSearch: useCallback(() => {
       sidebarRef.current?.focusSearch();
@@ -205,7 +200,6 @@ function ChatArea({
       }
     }, [createSession, isMobile, setSidebarOpen]),
     onCloseModal: useCallback(() => {
-      // Close sidebar on mobile when pressing Escape
       if (isMobile && sidebarOpen) {
         setSidebarOpen(false);
       }
@@ -227,7 +221,6 @@ function ChatArea({
     await deleteSession(id);
   };
 
-  // Handle creating session with custom options (from dialog)
   const handleCreateSessionWithOptions = async (options: {
     sessionName: string;
     agentId: string;
@@ -239,13 +232,11 @@ function ChatArea({
     }
   };
 
-  // Handle creating group (basic implementation for now)
   const handleCreateGroup = async (options: {
     groupName: string;
     agentIds: string[];
     model?: string;
   }) => {
-    // Create group session using the hook
     const groupSession = await createGroupSession(options);
 
     if (!groupSession) {
@@ -284,7 +275,6 @@ function ChatArea({
     fetchMessages();
   };
 
-  // Sidebar 内容
   const sidebarContent = (
     <Sidebar
       ref={sidebarRef}
@@ -303,10 +293,8 @@ function ChatArea({
 
   return (
     <>
-      {/* 桌面端 Sidebar */}
       {!isMobile && sidebarContent}
 
-      {/* 移动端 Sidebar (Sheet) */}
       {isMobile && (
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
           <SheetContent
@@ -322,7 +310,6 @@ function ChatArea({
         </Sheet>
       )}
 
-      {/* Chat Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <ChatHeader
           currentSession={currentSession}
@@ -332,11 +319,9 @@ function ChatArea({
           isMobile={isMobile}
         />
 
-        {/* Message List Area */}
         <div className="flex-1 flex flex-col overflow-hidden bg-background relative">
           {currentSession ? (
             <>
-              {/* 错误状态 */}
               {error && (
                 <div className="flex items-center justify-center gap-3 p-4 bg-red-900/20 border-b border-red-800/50">
                   <AlertCircle className="h-5 w-5 text-red-400" />
@@ -353,7 +338,6 @@ function ChatArea({
                 </div>
               )}
 
-              {/* 消息列表 */}
               {messages.length === 0 && !isStreaming && !messageLoading && !isSessionSwitching ? (
                 <NoMessagesState />
               ) : (
@@ -369,7 +353,6 @@ function ChatArea({
                 </div>
               )}
 
-              {/* 加载遮罩 - 初始加载 + 会话切换时覆盖在消息区上方 */}
               {(isSessionSwitching || (messageLoading && isInitialLoad)) && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
                   <div className="flex flex-col items-center gap-2">
@@ -383,7 +366,6 @@ function ChatArea({
                 </div>
               )}
 
-              {/* 输入区域 */}
               <InputArea
                 onSend={handleSendMessage}
                 isStreaming={isStreaming}
@@ -436,7 +418,15 @@ function GroupChatArea({
     deleteSession,
     selectSession,
   } = useSession();
-  const { messages, loading: messageLoading, sendMessage, abortStream, members, streamingMap } = useGroupChat();
+  const {
+    group,
+    messages,
+    loading: messageLoading,
+    sendMessage,
+    abortStream,
+    members,
+    streamingMap,
+  } = useGroupChat();
 
   const sidebarRef = useRef<SidebarRef>(null);
 
@@ -513,39 +503,6 @@ function GroupChatArea({
     setSidebarOpen(!sidebarOpen);
   };
 
-  const formattedMessages = useMemo<Message[]>(() => {
-    return messages.map((message) => {
-      let content = message.content;
-      if (message.senderType === "agent") {
-        const prefixParts = [message.senderEmoji ?? "", message.senderName ?? message.senderId ?? "Agent"].filter(Boolean);
-        const prefix = prefixParts.length > 0 ? `[${prefixParts.join(" ")}] ` : "";
-        content = `${prefix}${message.content}`;
-      }
-
-      return {
-        id: message.id,
-        sessionId: message.groupId,
-        role: message.role,
-        content,
-        createdAt: message.createdAt,
-      };
-    });
-  }, [messages]);
-
-  const { isStreaming, streamContent } = useMemo(() => {
-    const chunks: string[] = [];
-    for (const member of members) {
-      const streamState = streamingMap.get(member.agentId);
-      if (!streamState?.isStreaming || !streamState.content) continue;
-      const prefix = `[${[member.emoji ?? "", member.name].filter(Boolean).join(" ")}] `;
-      chunks.push(`${prefix}${streamState.content}`);
-    }
-    return {
-      isStreaming: Array.from(streamingMap.values()).some((stream) => stream.isStreaming),
-      streamContent: chunks.join("\n\n"),
-    };
-  }, [members, streamingMap]);
-
   const groupAgents = useMemo(
     () =>
       members.map((member) => ({
@@ -554,6 +511,11 @@ function GroupChatArea({
         emoji: member.emoji ?? undefined,
       })),
     [members]
+  );
+
+  const isStreaming = useMemo(
+    () => Array.from(streamingMap.values()).some((stream) => stream.isStreaming),
+    [streamingMap]
   );
 
   const sidebarContent = (
@@ -598,22 +560,25 @@ function GroupChatArea({
           onToggleSidebar={handleToggleSidebar}
           isSidebarOpen={sidebarOpen}
           isMobile={isMobile}
+          isGroup
+          groupName={group?.name || currentSession?.title}
+          groupMembers={members}
         />
 
         <div className="flex-1 flex flex-col overflow-hidden bg-background relative">
           {currentSession ? (
             <>
-              {formattedMessages.length === 0 && !isStreaming && !messageLoading ? (
+              {messageLoading && messages.length === 0 ? (
+                <MessageListSkeleton />
+              ) : messages.length === 0 && !isStreaming ? (
                 <NoMessagesState />
               ) : (
                 <div className="flex-1 overflow-hidden">
-                  <MessageList
-                    messages={formattedMessages}
-                    isStreaming={isStreaming}
-                    streamContent={streamContent}
-                    loading={messageLoading}
-                    isInitialLoad={formattedMessages.length === 0}
-                    toolCalls={[]}
+                  <GroupMessageList
+                    messages={messages}
+                    members={members}
+                    streamingMap={streamingMap}
+                    loading={false}
                   />
                 </div>
               )}
@@ -649,7 +614,6 @@ function GroupChatArea({
   );
 }
 
-// 会话和聊天组合组件（需要在 SessionProvider 内部，包裹 ChatProvider）
 function SessionAndChat({
   isMobile,
   sidebarOpen,
@@ -688,14 +652,12 @@ function SessionAndChat({
   );
 }
 
-// 主页面内容（需要在 GatewayProvider 内部）
 function MainContent() {
   const [isMobile, setIsMobile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const hasEverConnected = useRef(false);
   const { status } = useGateway();
 
-  // 检测移动端
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -705,13 +667,11 @@ function MainContent() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // 未连接时显示加载页（首次）或断连状态
   if (status !== "connected") {
     if (!hasEverConnected.current) {
       return (
         <div className="flex h-screen items-center justify-center bg-background">
           <div className="flex flex-col items-center gap-4">
-            {/* Logo / 品牌 */}
             <div className="relative">
               <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
                 <MessageCircle className="h-6 w-6 text-primary" />
@@ -739,10 +699,8 @@ function MainContent() {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* 连接状态 */}
       <ConnectionStatus />
 
-      {/* 主体内容区域 */}
       <div className="flex flex-1 overflow-hidden">
         <SessionProvider>
           <SessionAndChat
@@ -756,8 +714,6 @@ function MainContent() {
   );
 }
 
-// 根组件
-// GatewayProvider 已在 layout.tsx 的 Providers 中提供
 export default function Home() {
   return <MainContent />;
 }
