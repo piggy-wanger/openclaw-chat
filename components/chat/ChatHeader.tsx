@@ -61,6 +61,7 @@ interface ChatHeaderProps {
   groupName?: string;
   groupMembers?: GroupMember[];
   onGroupUpdated?: () => void;
+  onGroupDeleted?: () => void;
 }
 
 export function ChatHeader({
@@ -73,6 +74,7 @@ export function ChatHeader({
   groupName,
   groupMembers = [],
   onGroupUpdated,
+  onGroupDeleted,
 }: ChatHeaderProps) {
   const { status, client, isConnected } = useGateway();
   const { settings } = useSettings();
@@ -248,6 +250,7 @@ export function ChatHeader({
         onOpenChange={setShowGroupSettings}
         groupId={currentSession?.groupId ?? null}
         onGroupUpdated={onGroupUpdated}
+        onGroupDeleted={onGroupDeleted}
       />
     </header>
   );

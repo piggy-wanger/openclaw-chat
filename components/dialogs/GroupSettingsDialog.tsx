@@ -22,6 +22,7 @@ type GroupSettingsDialogProps = {
   onOpenChange: (open: boolean) => void;
   groupId: string | null;
   onGroupUpdated?: () => void;
+  onGroupDeleted?: () => void;
 };
 
 type GroupDetailResponse = {
@@ -47,6 +48,7 @@ export function GroupSettingsDialog({
   onOpenChange,
   groupId,
   onGroupUpdated,
+  onGroupDeleted,
 }: GroupSettingsDialogProps) {
   const { client, isConnected } = useGateway();
 
@@ -219,6 +221,7 @@ export function GroupSettingsDialog({
 
       onOpenChange(false);
       onGroupUpdated?.();
+      onGroupDeleted?.();
     } catch (err) {
       console.error("[GroupSettingsDialog] Failed to delete group:", err);
     } finally {

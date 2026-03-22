@@ -572,6 +572,7 @@ function GroupChatArea({
           groupName={group?.name || currentSession?.title}
           groupMembers={members}
           onGroupUpdated={handleGroupUpdated}
+          onGroupDeleted={() => selectSession(null)}
         />
 
         <div className="flex-1 flex flex-col overflow-hidden bg-background relative">
