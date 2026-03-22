@@ -411,8 +411,7 @@ function ChatArea({
 
 function resolveGroupIdFromSession(session: Session | null): string | null {
   if (!session) return null;
-  const withGroupMeta = session as Session & { groupId?: string; agentId?: string };
-  return withGroupMeta.groupId ?? withGroupMeta.agentId ?? session.id;
+  return session.groupId ?? null;
 }
 
 function GroupChatArea({

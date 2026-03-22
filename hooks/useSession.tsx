@@ -52,6 +52,7 @@ function sessionEntryToSession(entry: SessionEntry): Session {
   // origin 可能是字符串（如 "direct"）或对象（群组场景）
   let type: Session["type"] = "direct";
   let title = entry.title || extractSessionDisplayName(entry.key);
+  let groupId: string | undefined;
 
   if (typeof entry.origin === "string") {
     type = entry.origin as Session["type"];
@@ -60,6 +61,9 @@ function sessionEntryToSession(entry: SessionEntry): Session {
     const originObj = entry.origin as Record<string, unknown>;
     if (originObj.type === "group" || Array.isArray(originObj.agentIds)) {
       type = "group";
+      if (typeof originObj.groupId === "string" && originObj.groupId.trim()) {
+        groupId = originObj.groupId;
+      }
       // 使用 origin 中的 label 或 name 作为群组名称
       if (originObj.label && typeof originObj.label === "string") {
         title = entry.title || originObj.label;
@@ -73,6 +77,7 @@ function sessionEntryToSession(entry: SessionEntry): Session {
     id: entry.key,
     title,
     type,
+    groupId,
     model: entry.model || "unknown",
     createdAt: entry.updatedAt || Date.now(),
     updatedAt: entry.updatedAt || Date.now(),
@@ -206,15 +211,60 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        // 使用第一个 agent 作为主 agent，并添加 nanoid 避免冲突
-        const primaryAgentId = agentIds[0];
-        const sessionKey = `agent:${primaryAgentId}:${groupName}:${nanoid(6)}`;
+        type AgentConfig = {
+          id: string;
+          identity?: {
+            name?: string;
+            emoji?: string;
+          };
+        };
 
-        // 创建群组 session（真实会话在用户发送首条消息时由 Gateway 创建）
+        const configResult = await client.configGet();
+        const config = configResult.config as {
+          agents?: {
+            list?: AgentConfig[];
+          };
+        };
+        const agentMap = new Map((config.agents?.list ?? []).map((agent) => [agent.id, agent]));
+
+        const createGroupRes = await fetch("/api/groups", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: groupName,
+            members: agentIds.map((agentId) => {
+              const agent = agentMap.get(agentId);
+              return {
+                agentId,
+                name: agent?.identity?.name || agentId,
+                emoji: agent?.identity?.emoji,
+              };
+            }),
+          }),
+        });
+
+        if (!createGroupRes.ok) {
+          throw new Error(`Failed to create group: ${createGroupRes.status}`);
+        }
+
+        const createGroupData = (await createGroupRes.json()) as {
+          group?: { id?: string };
+        };
+        const groupId = createGroupData.group?.id;
+        if (!groupId) {
+          throw new Error("Group ID missing from createGroup response");
+        }
+
+        // 使用第一个 agent 作为主 agent 的会话 key，确保可与后续聊天会话 key 对齐
+        const primaryAgentId = agentIds[0];
+        const sessionKey = `agent:${primaryAgentId}:${groupId}`;
+
+        // 创建群组 session（groupId 用于关联本地 group 数据）
         const groupSession: Session = {
           id: sessionKey,
           title: groupName,
           type: "group",
+          groupId,
           model: model || "unknown",
           createdAt: Date.now(),
           updatedAt: Date.now(),

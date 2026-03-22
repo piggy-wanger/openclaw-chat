@@ -95,6 +95,8 @@ export function GroupChatProvider({
   const sessionKeyToAgentRef = useRef<Map<string, string>>(new Map());
   const toolCallsRef = useRef<Map<string, unknown[]>>(new Map());
   const completedRunsRef = useRef<Set<string>>(new Set());
+  const groupFetchEpochRef = useRef(0);
+  const groupFetchAbortRef = useRef<AbortController | null>(null);
 
   const setStreamingMapState = useCallback(
     (updater: Map<string, StreamingState> | ((prev: Map<string, StreamingState>) => Map<string, StreamingState>)) => {
@@ -122,19 +124,25 @@ export function GroupChatProvider({
   }, [groupId]);
 
   const fetchGroupData = useCallback(async () => {
+    const currentEpoch = ++groupFetchEpochRef.current;
+    groupFetchAbortRef.current?.abort();
+    const abortController = new AbortController();
+    groupFetchAbortRef.current = abortController;
+
     if (!groupId) {
       setGroup(null);
       setMembers([]);
       setMessages([]);
+      setLoading(false);
       return;
     }
 
     setLoading(true);
     try {
       const [groupRes, membersRes, messagesRes] = await Promise.all([
-        fetch(`/api/groups/${groupId}`, { cache: "no-store" }),
-        fetch(`/api/groups/${groupId}/members`, { cache: "no-store" }),
-        fetch(`/api/groups/${groupId}/messages`, { cache: "no-store" }),
+        fetch(`/api/groups/${groupId}`, { cache: "no-store", signal: abortController.signal }),
+        fetch(`/api/groups/${groupId}/members`, { cache: "no-store", signal: abortController.signal }),
+        fetch(`/api/groups/${groupId}/messages`, { cache: "no-store", signal: abortController.signal }),
       ]);
 
       if (!groupRes.ok || !membersRes.ok || !messagesRes.ok) {
@@ -145,18 +153,27 @@ export function GroupChatProvider({
       const membersData = (await membersRes.json()) as GroupMembersResponse;
       const messagesData = (await messagesRes.json()) as GroupMessagesResponse;
 
+      if (currentEpoch !== groupFetchEpochRef.current) return;
+
       setGroup(groupData.group ?? null);
       const memberList = Array.isArray(membersData.members) ? membersData.members : [];
       setMembers(memberList);
       membersRef.current = memberList;
       setMessages(Array.isArray(messagesData.messages) ? messagesData.messages : []);
     } catch (err) {
+      if (currentEpoch !== groupFetchEpochRef.current) return;
+      if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("[GroupChat] Failed to initialize:", err);
       setGroup(null);
       setMembers([]);
       setMessages([]);
     } finally {
-      setLoading(false);
+      if (currentEpoch === groupFetchEpochRef.current) {
+        setLoading(false);
+      }
+      if (groupFetchAbortRef.current === abortController) {
+        groupFetchAbortRef.current = null;
+      }
     }
   }, [groupId]);
 
@@ -322,6 +339,10 @@ export function GroupChatProvider({
 
       const state = event.state;
       const isCompleted = state === "final" || (event as unknown as { status?: string }).status === "completed";
+      const shouldValidateRunId = isCompleted || state === "aborted" || state === "error";
+      if (shouldValidateRunId && streamState.runId && event.runId !== streamState.runId) {
+        return;
+      }
 
       if (isCompleted) {
         const runKey = `${event.sessionKey}:${event.runId}`;
@@ -407,6 +428,7 @@ export function GroupChatProvider({
     sessionKeyToAgentRef.current.clear();
     toolCallsRef.current.clear();
     completedRunsRef.current.clear();
+    groupFetchAbortRef.current?.abort();
 
     return () => {
       void abortStream();
@@ -415,6 +437,8 @@ export function GroupChatProvider({
       sessionKeyToAgentRef.current.clear();
       toolCallsRef.current.clear();
       completedRunsRef.current.clear();
+      groupFetchAbortRef.current?.abort();
+      groupFetchAbortRef.current = null;
     };
   }, [groupId, abortStream, setStreamingMapState]);
 

@@ -4,6 +4,7 @@ export type Session = {
   id: string;
   title: string;
   type: "direct" | "group";
+  groupId?: string;
   model: string;
   createdAt: number;
   updatedAt: number;
