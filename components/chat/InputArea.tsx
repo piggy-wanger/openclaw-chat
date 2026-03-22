@@ -15,6 +15,7 @@ type GroupAgent = {
 
 type InputAreaProps = {
   onSend: (content: string) => void;
+  onSendWithMentions?: (content: string, mentionedAgentIds: string[]) => void;
   onUpload?: (files: FileList) => void;
   isStreaming: boolean;
   onAbort?: () => void;
@@ -26,6 +27,7 @@ type InputAreaProps = {
 
 function InputAreaInner({
   onSend,
+  onSendWithMentions,
   onUpload,
   isStreaming,
   onAbort,
@@ -138,6 +140,60 @@ function InputAreaInner({
   );
 
   // 处理键盘事件
+  const extractMentionedAgentIds = useCallback(
+    (content: string): string[] => {
+      if (!isGroup || groupAgents.length === 0) return [];
+
+      const mentionRegex = /@([^\s@]+)/g;
+      const uniqueIds = new Set<string>();
+      const normalizedAgents = groupAgents.map((agent) => ({
+        ...agent,
+        normalizedName: agent.name.trim().toLowerCase(),
+      }));
+
+      for (const match of content.matchAll(mentionRegex)) {
+        const rawMention = match[1]?.trim().toLowerCase() ?? "";
+        const normalizedMention = rawMention.replace(/[.,!?;:，。！？；：]+$/g, "");
+        if (!normalizedMention) continue;
+
+        for (const agent of normalizedAgents) {
+          if (
+            agent.normalizedName === normalizedMention ||
+            agent.normalizedName.startsWith(normalizedMention)
+          ) {
+            uniqueIds.add(agent.id);
+          }
+        }
+      }
+
+      return Array.from(uniqueIds);
+    },
+    [groupAgents, isGroup]
+  );
+
+  const dispatchSend = useCallback(() => {
+    const trimmed = input.trim();
+    if (!(trimmed || attachedFiles.length > 0) || isStreaming || disabled) return;
+
+    const mentionedAgentIds = extractMentionedAgentIds(trimmed);
+    if (isGroup && onSendWithMentions) {
+      onSendWithMentions(trimmed, mentionedAgentIds);
+    } else {
+      onSend(trimmed);
+    }
+    setInput("");
+    setAttachedFiles([]);
+  }, [
+    attachedFiles.length,
+    disabled,
+    extractMentionedAgentIds,
+    input,
+    isGroup,
+    isStreaming,
+    onSend,
+    onSendWithMentions,
+  ]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       // 如果 popup 打开，处理导航
@@ -181,11 +237,7 @@ function InputAreaInner({
       // 发送消息
       if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
-        if ((input.trim() || attachedFiles.length > 0) && !isStreaming && !disabled) {
-          onSend(input.trim());
-          setInput("");
-          setAttachedFiles([]);
-        }
+        dispatchSend();
       }
     },
     [
@@ -193,21 +245,13 @@ function InputAreaInner({
       filteredAgents,
       selectedIndex,
       selectAgent,
-      input,
-      isStreaming,
-      disabled,
-      onSend,
-      attachedFiles,
+      dispatchSend,
     ]
   );
 
   const handleSend = useCallback(() => {
-    if ((input.trim() || attachedFiles.length > 0) && !isStreaming && !disabled) {
-      onSend(input.trim());
-      setInput("");
-      setAttachedFiles([]);
-    }
-  }, [input, isStreaming, disabled, onSend, attachedFiles]);
+    dispatchSend();
+  }, [dispatchSend]);
 
   const handleAbort = useCallback(() => {
     if (onAbort) onAbort();
