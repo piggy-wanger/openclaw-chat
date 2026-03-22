@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ToolCallList } from "./ToolCallList";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { hashHue } from "@/lib/utils";
-import type { GroupMessage, ToolCall } from "@/lib/types";
+import type { GroupMessage, ToolCall, ToolCallStatus } from "@/lib/types";
 
 type GroupMessageItemProps = {
   message: GroupMessage;
@@ -19,7 +19,8 @@ function parseToolCalls(raw: string | null | undefined): ToolCall[] {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
 
-    return parsed.flatMap((item): ToolCall[] => {
+    // Parse all raw items into intermediate form, then merge by id
+    const entries = parsed.flatMap((item) => {
       if (!item || typeof item !== "object") return [];
       const candidate = item as Record<string, unknown>;
 
@@ -28,6 +29,8 @@ function parseToolCalls(raw: string | null | undefined): ToolCall[] {
         : typeof candidate.toolCallId === "string"
           ? candidate.toolCallId
           : null;
+      if (!id) return [];
+
       const name = typeof candidate.name === "string" ? candidate.name : null;
 
       const rawArguments = candidate.arguments ?? candidate.args;
@@ -49,7 +52,8 @@ function parseToolCalls(raw: string | null | undefined): ToolCall[] {
               ? "running"
               : null;
 
-      if (!id || !name || !status) return [];
+      // Allow items without name (non-start phases) but require id + status
+      if (!status) return [];
 
       const resultValue = candidate.result;
       const result =
@@ -65,13 +69,33 @@ function parseToolCalls(raw: string | null | undefined): ToolCall[] {
 
       return [{
         id,
-        name,
+        name: name || "unknown",
         arguments: argumentsValue,
-        status,
+        status: status as ToolCallStatus,
         result,
         error,
       }];
     });
+
+    // Merge phases: later phases override earlier ones for same id
+    const merged = new Map<string, ToolCall>();
+    for (const entry of entries) {
+      const existing = merged.get(entry.id);
+      if (existing) {
+        // Merge: keep name/arguments from first, update status/result/error from later
+        merged.set(entry.id, {
+          ...existing,
+          name: existing.name || entry.name || "unknown",
+          arguments: entry.status === "running" ? entry.arguments : existing.arguments,
+          status: entry.status as ToolCallStatus,
+          result: entry.result ?? existing.result,
+          error: entry.error ?? existing.error,
+        });
+      } else {
+        merged.set(entry.id, entry);
+      }
+    }
+    return Array.from(merged.values());
   } catch {
     return [];
   }
