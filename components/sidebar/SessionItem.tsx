@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { MoreVertical, Pencil, Trash2, Users } from "lucide-react";
@@ -28,6 +28,7 @@ import { extractSessionDisplayName } from "@/hooks/useSession";
 
 interface SessionItemProps {
   session: Session;
+  groupMembers?: GroupMember[];
   isActive: boolean;
   onSelect: () => void;
   onRename: (title: string) => void;
@@ -36,6 +37,7 @@ interface SessionItemProps {
 
 export function SessionItem({
   session,
+  groupMembers = [],
   isActive,
   onSelect,
   onRename,
@@ -45,43 +47,11 @@ export function SessionItem({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [newTitle, setNewTitle] = useState(session.title);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
 
   const relativeTime = formatDistanceToNow(session.updatedAt, {
     addSuffix: true,
     locale: zhCN,
   });
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (session.type !== "group" || !session.groupId) {
-      return;
-    }
-
-    const fetchMembers = async () => {
-      try {
-        const res = await fetch(`/api/groups/${session.groupId}/members`, {
-          cache: "no-store",
-        });
-        if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { members?: GroupMember[] };
-        if (!cancelled) {
-          setGroupMembers(Array.isArray(data.members) ? data.members : []);
-        }
-      } catch {
-        if (!cancelled) {
-          setGroupMembers([]);
-        }
-      }
-    };
-
-    void fetchMembers();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [session.groupId, session.type]);
 
   const handleRename = () => {
     if (newTitle.trim() && newTitle !== session.title) {

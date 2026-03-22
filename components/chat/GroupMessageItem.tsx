@@ -6,38 +6,71 @@ import { Bot } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ToolCallList } from "./ToolCallList";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { hashHue } from "@/lib/utils";
 import type { GroupMessage, ToolCall } from "@/lib/types";
 
 type GroupMessageItemProps = {
   message: GroupMessage;
 };
 
-function hashHue(input: string): number {
-  let hash = 0;
-  for (let i = 0; i < input.length; i += 1) {
-    hash = (hash << 5) - hash + input.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash) % 360;
-}
-
 function parseToolCalls(raw: string | null | undefined): ToolCall[] {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is ToolCall => {
-      if (!item || typeof item !== "object") return false;
+
+    return parsed.flatMap((item): ToolCall[] => {
+      if (!item || typeof item !== "object") return [];
       const candidate = item as Record<string, unknown>;
-      return (
-        typeof candidate.id === "string" &&
-        typeof candidate.name === "string" &&
-        typeof candidate.arguments === "object" &&
-        candidate.arguments !== null &&
-        (candidate.status === "running" ||
-          candidate.status === "success" ||
-          candidate.status === "error")
-      );
+
+      const id = typeof candidate.id === "string"
+        ? candidate.id
+        : typeof candidate.toolCallId === "string"
+          ? candidate.toolCallId
+          : null;
+      const name = typeof candidate.name === "string" ? candidate.name : null;
+
+      const rawArguments = candidate.arguments ?? candidate.args;
+      const argumentsValue =
+        rawArguments && typeof rawArguments === "object"
+          ? (rawArguments as Record<string, unknown>)
+          : {};
+
+      const phase = typeof candidate.phase === "string" ? candidate.phase : undefined;
+      const hasError = candidate.isError === true;
+      const rawStatus = typeof candidate.status === "string" ? candidate.status : null;
+      const status = rawStatus === "running" || rawStatus === "success" || rawStatus === "error"
+        ? rawStatus
+        : hasError
+          ? "error"
+          : phase === "result"
+            ? "success"
+            : phase === "start" || phase === "running"
+              ? "running"
+              : null;
+
+      if (!id || !name || !status) return [];
+
+      const resultValue = candidate.result;
+      const result =
+        status === "success" && resultValue !== undefined && resultValue !== null
+          ? typeof resultValue === "string"
+            ? resultValue
+            : JSON.stringify(resultValue)
+          : undefined;
+      const error =
+        status === "error" && resultValue !== undefined && resultValue !== null
+          ? String(resultValue)
+          : undefined;
+
+      return [{
+        id,
+        name,
+        arguments: argumentsValue,
+        status,
+        result,
+        error,
+      }];
     });
   } catch {
     return [];

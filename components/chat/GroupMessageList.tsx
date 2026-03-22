@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { GroupMessageItem } from "./GroupMessageItem";
+import { hashHue } from "@/lib/utils";
 import type { GroupMember, GroupMessage } from "@/lib/types";
 
 type StreamingState = {
@@ -20,15 +21,6 @@ type GroupMessageListProps = {
   members: GroupMember[];
   loading?: boolean;
 };
-
-function hashHue(input: string): number {
-  let hash = 0;
-  for (let i = 0; i < input.length; i += 1) {
-    hash = (hash << 5) - hash + input.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash) % 360;
-}
 
 function StreamingCursor() {
   return <span className="inline-block w-2 h-4 bg-foreground animate-pulse ml-0.5" />;
@@ -181,7 +173,7 @@ function GroupMessageListInner({
         ))}
 
         {streamingAgents.map((agent) => (
-          <div key={`${agent.agentId}-${agent.runId || "stream"}`} className="flex justify-start mb-4">
+          <div key={agent.agentId} className="flex justify-start mb-4">
             <div className="max-w-[85%] md:max-w-[75%]">
               <div className="flex items-center gap-2 mb-1">
                 <Avatar size="sm">

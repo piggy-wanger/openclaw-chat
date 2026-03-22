@@ -27,6 +27,26 @@ import { toast } from "sonner";
 import Link from "next/link";
 import type { Session } from "@/lib/types";
 
+function MessageListSkeleton() {
+  return (
+    <div className="flex-1 p-4 space-y-4">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div
+          key={i}
+          className={`flex ${i % 2 === 0 ? "justify-start" : "justify-end"}`}
+        >
+          <div
+            className={`h-16 rounded-2xl animate-pulse ${
+              i % 2 === 0 ? "bg-muted w-[60%]" : "bg-blue-900/30 w-[40%]"
+            }`}
+            style={{ animationDelay: `${i * 150}ms` }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function NotConnectedState() {
   return (
     <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -548,7 +568,9 @@ function GroupChatArea({
         <div className="flex-1 flex flex-col overflow-hidden bg-background relative">
           {currentSession ? (
             <>
-              {messages.length === 0 && !isStreaming && !messageLoading ? (
+              {messageLoading && messages.length === 0 ? (
+                <MessageListSkeleton />
+              ) : messages.length === 0 && !isStreaming ? (
                 <NoMessagesState />
               ) : (
                 <div className="flex-1 overflow-hidden">
@@ -556,7 +578,7 @@ function GroupChatArea({
                     messages={messages}
                     members={members}
                     streamingMap={streamingMap}
-                    loading={messageLoading}
+                    loading={false}
                   />
                 </div>
               )}
@@ -633,6 +655,7 @@ function SessionAndChat({
 function MainContent() {
   const [isMobile, setIsMobile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const hasEverConnected = useRef(false);
   const { status } = useGateway();
 
   useEffect(() => {
@@ -645,7 +668,7 @@ function MainContent() {
   }, []);
 
   if (status !== "connected") {
-    if (status === "connecting") {
+    if (!hasEverConnected.current) {
       return (
         <div className="flex h-screen items-center justify-center bg-background">
           <div className="flex flex-col items-center gap-4">
@@ -672,6 +695,8 @@ function MainContent() {
       </div>
     );
   }
+  hasEverConnected.current = true;
+
   return (
     <div className="flex h-screen bg-background">
       <ConnectionStatus />
