@@ -86,7 +86,7 @@ function parseToolCalls(raw: string | null | undefined): ToolCall[] {
         merged.set(entry.id, {
           ...existing,
           name: existing.name || entry.name || "unknown",
-          arguments: Object.keys(entry.arguments).length > 0 ? entry.arguments : existing.arguments,
+          arguments: Object.keys(existing.arguments).length > 0 ? existing.arguments : entry.arguments,
           status: entry.status as ToolCallStatus,
           result: entry.result ?? existing.result,
           error: entry.error ?? existing.error,
