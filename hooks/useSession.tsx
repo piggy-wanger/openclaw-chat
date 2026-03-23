@@ -90,6 +90,15 @@ function isGroupSession(session: Session): boolean {
   return session.type === "group" && typeof session.groupId === "string" && session.groupId.trim().length > 0;
 }
 
+function isGroupMemberSessionKey(sessionKey: string, groupIds: Set<string>): boolean {
+  if (!sessionKey || groupIds.size === 0) return false;
+  const parts = sessionKey.split(":");
+  if (parts.length !== 3) return false;
+  if (parts[0] !== "agent") return false;
+  const groupId = parts[2]?.trim();
+  return Boolean(groupId && groupIds.has(groupId));
+}
+
 function loadStoredGroupSessions(): Session[] {
   if (typeof window === "undefined") return [];
   try {
@@ -205,6 +214,31 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
+      const localGroupSessions = loadStoredGroupSessions();
+      const knownGroupIds = new Set<string>(
+        localGroupSessions
+          .map((session) => session.groupId?.trim())
+          .filter((id): id is string => Boolean(id))
+      );
+
+      try {
+        const groupsRes = await fetch("/api/groups", { cache: "no-store" });
+        if (groupsRes.ok) {
+          const groupsData = (await groupsRes.json()) as {
+            groups?: Array<{ id?: string }>;
+          };
+          const groups = Array.isArray(groupsData.groups) ? groupsData.groups : [];
+          for (const group of groups) {
+            const groupId = group.id?.trim();
+            if (groupId) {
+              knownGroupIds.add(groupId);
+            }
+          }
+        }
+      } catch (groupErr) {
+        console.warn("[Session] Failed to fetch group IDs for session filtering:", groupErr);
+      }
+
       const entries = await client.sessionsList({
         limit: 100,
         includeDerivedTitles: true,
@@ -213,10 +247,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // 转换为 Session 类型并按 updatedAt 降序排列
       const sessionList = entries
         .filter(e => e.origin != null)
+        .filter((entry) => !isGroupMemberSessionKey(entry.key, knownGroupIds))
         .map(sessionEntryToSession)
         .sort((a, b) => b.updatedAt - a.updatedAt);
-
-      const localGroupSessions = loadStoredGroupSessions();
       const mergedMap = new Map<string, Session>(sessionList.map((session) => [session.id, session]));
 
       for (const localSession of localGroupSessions) {
