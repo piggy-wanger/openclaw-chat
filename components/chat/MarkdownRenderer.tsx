@@ -1,15 +1,30 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, memo } from "react";
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  memo,
+  cloneElement,
+  isValidElement,
+  type ReactNode,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { Check, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  MENTION_HIGHLIGHT_END,
+  MENTION_HIGHLIGHT_START,
+  highlightMentions,
+} from "@/lib/mentions";
 
 type MarkdownRendererProps = {
   content: string;
   className?: string;
+  highlightGroupMentions?: boolean;
 };
 
 // 代码块复制按钮组件
@@ -123,7 +138,7 @@ function Link({
       className="text-blue-400 hover:text-blue-300 underline underline-offset-2"
       {...props}
     >
-      {children}
+      {renderMentionNodes(children)}
     </a>
   );
 }
@@ -161,8 +176,65 @@ function Td({ children, ...props }: React.HTMLAttributes<HTMLTableCellElement>) 
   );
 }
 
+function renderMentionTextNode(text: string): ReactNode {
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  let key = 0;
+
+  while (cursor < text.length) {
+    const start = text.indexOf(MENTION_HIGHLIGHT_START, cursor);
+    if (start < 0) {
+      parts.push(text.slice(cursor));
+      break;
+    }
+
+    if (start > cursor) {
+      parts.push(text.slice(cursor, start));
+    }
+
+    const contentStart = start + MENTION_HIGHLIGHT_START.length;
+    const end = text.indexOf(MENTION_HIGHLIGHT_END, contentStart);
+    if (end < 0) {
+      parts.push(text.slice(start));
+      break;
+    }
+
+    const mentionText = text.slice(contentStart, end);
+    parts.push(
+      <span key={`mention-${key++}`} className="text-amber-400 font-medium">
+        {mentionText}
+      </span>
+    );
+    cursor = end + MENTION_HIGHLIGHT_END.length;
+  }
+
+  return parts.length === 1 && typeof parts[0] === "string" ? parts[0] : <>{parts}</>;
+}
+
+function renderMentionNodes(node: ReactNode): ReactNode {
+  if (typeof node === "string") {
+    return renderMentionTextNode(node);
+  }
+
+  if (Array.isArray(node)) {
+    return node.map((child) => renderMentionNodes(child));
+  }
+
+  if (isValidElement<{ children?: ReactNode }>(node)) {
+    return cloneElement(node, undefined, renderMentionNodes(node.props.children));
+  }
+
+  return node;
+}
+
 // 主渲染组件
-function MarkdownRendererInner({ content, className }: MarkdownRendererProps) {
+function MarkdownRendererInner({
+  content,
+  className,
+  highlightGroupMentions = false,
+}: MarkdownRendererProps) {
+  const markdownContent = highlightGroupMentions ? highlightMentions(content) : content;
+
   return (
     <div className={cn("prose prose-invert max-w-none", className)}>
       <ReactMarkdown
@@ -174,17 +246,26 @@ function MarkdownRendererInner({ content, className }: MarkdownRendererProps) {
           table: Table,
           th: Th,
           td: Td,
+          li: ({ children }) => <li>{renderMentionNodes(children)}</li>,
           // 段落样式
-          p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+          p: ({ children }) => (
+            <p className="mb-3 last:mb-0">{renderMentionNodes(children)}</p>
+          ),
           // 标题样式
           h1: ({ children }) => (
-            <h1 className="text-2xl font-bold mb-3 mt-4 first:mt-0">{children}</h1>
+            <h1 className="text-2xl font-bold mb-3 mt-4 first:mt-0">
+              {renderMentionNodes(children)}
+            </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="text-xl font-bold mb-2 mt-4 first:mt-0">{children}</h2>
+            <h2 className="text-xl font-bold mb-2 mt-4 first:mt-0">
+              {renderMentionNodes(children)}
+            </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="text-lg font-bold mb-2 mt-3 first:mt-0">{children}</h3>
+            <h3 className="text-lg font-bold mb-2 mt-3 first:mt-0">
+              {renderMentionNodes(children)}
+            </h3>
           ),
           // 列表样式
           ul: ({ children }) => (
@@ -196,14 +277,14 @@ function MarkdownRendererInner({ content, className }: MarkdownRendererProps) {
           // 引用样式
           blockquote: ({ children }) => (
             <blockquote className="border-l-4 border-border pl-4 my-3 text-muted-foreground italic">
-              {children}
+              {renderMentionNodes(children)}
             </blockquote>
           ),
           // 水平线
           hr: () => <hr className="my-4 border-border" />,
         }}
       >
-        {content}
+        {markdownContent}
       </ReactMarkdown>
     </div>
   );

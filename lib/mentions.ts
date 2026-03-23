@@ -5,6 +5,16 @@ export type MentionableAgent = {
 
 const MENTION_REGEX = /@([^\s@]+)/g;
 const TRAILING_PUNCTUATION_REGEX = /[.,!?;:，。！？；：、)）\]】}>》"“”'’`]+$/g;
+export const MENTION_HIGHLIGHT_START = "[[[MENTION_START]]]";
+export const MENTION_HIGHLIGHT_END = "[[[MENTION_END]]]";
+
+export type ParsedMention = {
+  raw: string;
+  text: string;
+  value: string;
+  suffix: string;
+  start: number;
+};
 
 function normalizeToken(value: string): string {
   return value.trim().toLowerCase();
@@ -12,6 +22,49 @@ function normalizeToken(value: string): string {
 
 function stripTrailingPunctuation(value: string): string {
   return value.replace(TRAILING_PUNCTUATION_REGEX, "");
+}
+
+export function parseMentions(text: string): ParsedMention[] {
+  if (!text.trim()) return [];
+
+  const mentions: ParsedMention[] = [];
+  for (const match of text.matchAll(MENTION_REGEX)) {
+    const rawMentionBody = match[1] ?? "";
+    const core = stripTrailingPunctuation(rawMentionBody);
+    if (!core) continue;
+
+    const start = match.index ?? -1;
+    if (start < 0) continue;
+
+    const suffix = rawMentionBody.slice(core.length);
+    mentions.push({
+      raw: `@${rawMentionBody}`,
+      text: `@${core}`,
+      value: core,
+      suffix,
+      start,
+    });
+  }
+
+  return mentions;
+}
+
+export function highlightMentions(text: string): string {
+  const mentions = parseMentions(text);
+  if (mentions.length === 0) return text;
+
+  let cursor = 0;
+  let result = "";
+
+  for (const mention of mentions) {
+    const rawEnd = mention.start + mention.raw.length;
+    result += text.slice(cursor, mention.start);
+    result += `${MENTION_HIGHLIGHT_START}${mention.text}${MENTION_HIGHLIGHT_END}${mention.suffix}`;
+    cursor = rawEnd;
+  }
+
+  result += text.slice(cursor);
+  return result;
 }
 
 export function createMentionLookup(agents: MentionableAgent[]): Map<string, string> {
@@ -38,10 +91,8 @@ export function extractMentionedAgentIds(content: string, agents: MentionableAge
   const mentionLookup = createMentionLookup(agents);
   const mentionedIds = new Set<string>();
 
-  for (const match of content.matchAll(MENTION_REGEX)) {
-    const rawMention = match[1] ?? "";
-    const mentionCore = stripTrailingPunctuation(rawMention);
-    const normalizedMention = normalizeToken(mentionCore);
+  for (const mention of parseMentions(content)) {
+    const normalizedMention = normalizeToken(mention.value);
     if (!normalizedMention) continue;
 
     const agentId = mentionLookup.get(normalizedMention);
