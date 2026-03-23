@@ -63,28 +63,50 @@ function normalizeStateValue(value: unknown): string {
 
 function isTerminalSuccess(event: ChatEvent): boolean {
   const state = normalizeStateValue(event.state);
-  if (state === "final" || state === "completed" || state === "success" || state === "done") {
-    return true;
-  }
-
-  const status = normalizeStateValue((event as unknown as { status?: string }).status);
-  return status === "completed" || status === "success" || status === "done" || status === "final";
-}
-
-function isTerminalFailure(event: ChatEvent): boolean {
-  const state = normalizeStateValue(event.state);
-  if (state === "aborted" || state === "error" || state === "failed" || state === "cancelled") {
+  if (
+    state === "final" ||
+    state === "completed" ||
+    state === "success" ||
+    state === "done" ||
+    state === "finished" ||
+    state === "succeeded"
+  ) {
     return true;
   }
 
   const status = normalizeStateValue((event as unknown as { status?: string }).status);
   return (
-    status === "aborted" ||
-    status === "error" ||
-    status === "failed" ||
-    status === "cancelled" ||
-    status === "canceled"
+    status === "completed" ||
+    status === "success" ||
+    status === "done" ||
+    status === "final" ||
+    status === "finished" ||
+    status === "succeeded"
   );
+}
+
+function isTerminalFailure(event: ChatEvent): boolean {
+  const state = normalizeStateValue(event.state);
+  if (
+    state === "aborted" ||
+    state === "error" ||
+    state === "failed" ||
+    state === "cancelled" ||
+    state === "canceled" ||
+    state === "stopped"
+  ) {
+    return true;
+  }
+
+  const status = normalizeStateValue((event as unknown as { status?: string }).status);
+  return (
+      status === "aborted" ||
+      status === "error" ||
+      status === "failed" ||
+      status === "cancelled" ||
+      status === "canceled" ||
+      status === "stopped"
+    );
 }
 
 function safeParseMessageContent(message: ChatEvent["message"]): string {
@@ -141,6 +163,7 @@ export function GroupChatProvider({
   const streamingMapRef = useRef<Map<string, StreamingState>>(new Map());
   const agentToSessionKeyRef = useRef<Map<string, string>>(new Map());
   const sessionKeyToAgentRef = useRef<Map<string, string>>(new Map());
+  const runIdToAgentRef = useRef<Map<string, string>>(new Map());
   const toolCallsRef = useRef<Map<string, unknown[]>>(new Map());
   const completedRunsRef = useRef<Set<string>>(new Set());
   const groupFetchEpochRef = useRef(0);
@@ -300,12 +323,17 @@ export function GroupChatProvider({
         if (sessionKey) {
           sessionKeyToAgentRef.current.delete(sessionKey);
         }
+        const activeRunId = streamingMapRef.current.get(agentId)?.runId;
+        if (activeRunId) {
+          runIdToAgentRef.current.delete(activeRunId);
+        }
         agentToSessionKeyRef.current.delete(agentId);
         toolCallsRef.current.delete(agentId);
       } else {
         setStreamingMapState(new Map());
         agentToSessionKeyRef.current.clear();
         sessionKeyToAgentRef.current.clear();
+        runIdToAgentRef.current.clear();
         toolCallsRef.current.clear();
       }
     },
@@ -425,6 +453,7 @@ export function GroupChatProvider({
               });
               return next;
             });
+            runIdToAgentRef.current.set(result.runId, member.agentId);
           } catch (err) {
             console.error(`[GroupChat] Failed to send message to ${member.agentId}:`, err);
             setStreamingMapState((prev) => {
@@ -452,8 +481,17 @@ export function GroupChatProvider({
 
   useEffect(() => {
     const handleChat = (event: ChatEvent) => {
-      const agentId = sessionKeyToAgentRef.current.get(event.sessionKey);
+      const eventSessionKey =
+        typeof (event as unknown as { sessionKey?: unknown }).sessionKey === "string"
+          ? (event as unknown as { sessionKey: string }).sessionKey
+          : "";
+      const agentId =
+        (eventSessionKey ? sessionKeyToAgentRef.current.get(eventSessionKey) : undefined) ??
+        runIdToAgentRef.current.get(event.runId);
       if (!agentId) return;
+      if (eventSessionKey && !sessionKeyToAgentRef.current.has(eventSessionKey)) {
+        sessionKeyToAgentRef.current.set(eventSessionKey, agentId);
+      }
 
       const streamState = streamingMapRef.current.get(agentId);
       if (!streamState) return;
@@ -466,7 +504,7 @@ export function GroupChatProvider({
       }
 
       if (isCompleted) {
-        const runKey = `${event.sessionKey}:${event.runId}`;
+        const runKey = `${eventSessionKey || "unknown"}:${event.runId}`;
         if (completedRunsRef.current.has(runKey)) return;
         completedRunsRef.current.add(runKey);
 
@@ -485,7 +523,13 @@ export function GroupChatProvider({
         });
 
         agentToSessionKeyRef.current.delete(agentId);
-        sessionKeyToAgentRef.current.delete(event.sessionKey);
+        if (eventSessionKey) {
+          sessionKeyToAgentRef.current.delete(eventSessionKey);
+        }
+        if (streamState.runId) {
+          runIdToAgentRef.current.delete(streamState.runId);
+        }
+        runIdToAgentRef.current.delete(event.runId);
         return;
       }
 
@@ -497,7 +541,13 @@ export function GroupChatProvider({
         });
 
         agentToSessionKeyRef.current.delete(agentId);
-        sessionKeyToAgentRef.current.delete(event.sessionKey);
+        if (eventSessionKey) {
+          sessionKeyToAgentRef.current.delete(eventSessionKey);
+        }
+        if (streamState.runId) {
+          runIdToAgentRef.current.delete(streamState.runId);
+        }
+        runIdToAgentRef.current.delete(event.runId);
       }
     };
 
@@ -507,8 +557,9 @@ export function GroupChatProvider({
 
   useEffect(() => {
     const handleAgent = (event: AgentEvent) => {
-      if (!event.sessionKey) return;
-      const agentId = sessionKeyToAgentRef.current.get(event.sessionKey);
+      const agentId =
+        (event.sessionKey ? sessionKeyToAgentRef.current.get(event.sessionKey) : undefined) ??
+        runIdToAgentRef.current.get(event.runId);
       if (!agentId) return;
 
       const streamState = streamingMapRef.current.get(agentId);
@@ -547,6 +598,7 @@ export function GroupChatProvider({
     setStreamingMapState(new Map());
     agentToSessionKeyRef.current.clear();
     sessionKeyToAgentRef.current.clear();
+    runIdToAgentRef.current.clear();
     toolCallsRef.current.clear();
     completedRunsRef.current.clear();
     setHasMoreMessages(false);
@@ -559,6 +611,7 @@ export function GroupChatProvider({
       setStreamingMapState(new Map());
       agentToSessionKeyRef.current.clear();
       sessionKeyToAgentRef.current.clear();
+      runIdToAgentRef.current.clear();
       toolCallsRef.current.clear();
       completedRunsRef.current.clear();
       setHasMoreMessages(false);
