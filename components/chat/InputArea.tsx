@@ -5,6 +5,7 @@ import { Send, Square, Paperclip, X, AtSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { extractMentionedAgentIds as extractMentionedAgentIdsFromContent } from "@/lib/mentions";
 
 type GroupAgent = {
   id: string;
@@ -84,31 +85,28 @@ function InputAreaInner({
       if (isGroup && groupAgents.length > 0) {
         // 查找光标前最近的 @ 符号
         const textBeforeCursor = value.substring(0, cursorPos);
-        const lastAtIndex = textBeforeCursor.lastIndexOf("@");
+        const mentionMatch = textBeforeCursor.match(/(?:^|\s)@([^\s@]*)$/);
 
-        if (lastAtIndex !== -1) {
-          // 检查 @ 后面是否有空格（如果有空格，说明 @ mention 已结束）
-          const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
-          const hasSpace = /\s/.test(textAfterAt);
-
-          if (!hasSpace) {
-            // @ mention 正在进行
-            setMentionStartPos(lastAtIndex);
-            setMentionQuery(textAfterAt);
-            setShowMentionPopup(true);
-            setSelectedIndex(0);
-          } else {
-            // @ mention 已结束
-            setShowMentionPopup(false);
-            setMentionStartPos(null);
-            setMentionQuery("");
-          }
-        } else {
-          // 没有 @ 符号
+        if (!mentionMatch) {
           setShowMentionPopup(false);
           setMentionStartPos(null);
           setMentionQuery("");
+          return;
         }
+
+        const query = mentionMatch[1] ?? "";
+        const startPos = cursorPos - query.length - 1;
+        if (startPos < 0 || value[startPos] !== "@") {
+          setShowMentionPopup(false);
+          setMentionStartPos(null);
+          setMentionQuery("");
+          return;
+        }
+
+        setMentionStartPos(startPos);
+        setMentionQuery(query);
+        setShowMentionPopup(true);
+        setSelectedIndex(0);
       }
     },
     [isGroup, groupAgents]
@@ -143,30 +141,7 @@ function InputAreaInner({
   const extractMentionedAgentIds = useCallback(
     (content: string): string[] => {
       if (!isGroup || groupAgents.length === 0) return [];
-
-      const mentionRegex = /@([^\s@]+)/g;
-      const uniqueIds = new Set<string>();
-      const normalizedAgents = groupAgents.map((agent) => ({
-        ...agent,
-        normalizedName: agent.name.trim().toLowerCase(),
-      }));
-
-      for (const match of content.matchAll(mentionRegex)) {
-        const rawMention = match[1]?.trim().toLowerCase() ?? "";
-        const normalizedMention = rawMention.replace(/[.,!?;:，。！？；：]+$/g, "");
-        if (!normalizedMention) continue;
-
-        for (const agent of normalizedAgents) {
-          if (
-            agent.normalizedName === normalizedMention ||
-            agent.normalizedName.startsWith(normalizedMention)
-          ) {
-            uniqueIds.add(agent.id);
-          }
-        }
-      }
-
-      return Array.from(uniqueIds);
+      return extractMentionedAgentIdsFromContent(content, groupAgents);
     },
     [groupAgents, isGroup]
   );

@@ -3,7 +3,7 @@ import { db, groups, groupMembers } from "@/db";
 import { desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { ErrorResponse } from "@/lib/types";
-import { updateAllow } from "@/lib/server/agent-allow";
+import { ensureAllowIncludes } from "@/lib/server/agent-allow";
 
 export const runtime = "nodejs";
 
@@ -121,15 +121,13 @@ export async function POST(request: Request): Promise<NextResponse<GroupResponse
       }
     });
 
-    await Promise.all(
-      memberAgentIds.map(async (agentId) => {
-        try {
-          await updateAllow(agentId, "add");
-        } catch (allowError) {
-          console.warn(`[groups] Failed to ensure agent allow for ${agentId}:`, allowError);
-        }
-      })
-    );
+    if (memberAgentIds.length > 0) {
+      try {
+        await ensureAllowIncludes(memberAgentIds);
+      } catch (allowError) {
+        console.warn("[groups] Failed to ensure agent allow list:", allowError);
+      }
+    }
 
     return NextResponse.json({
       group: newGroup,

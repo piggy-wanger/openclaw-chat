@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
-import { parseAgentId, updateAllow, type AgentAllowResponse } from "@/lib/server/agent-allow";
+import {
+  ensureAllowIncludes,
+  parseAgentId,
+  parseAgentIds,
+  updateAllow,
+  type AgentAllowResponse,
+  type AgentAllowSyncResponse,
+} from "@/lib/server/agent-allow";
 
 export const runtime = "nodejs";
 
@@ -10,6 +17,7 @@ type ErrorResponse = {
 
 type AgentAllowRequest = {
   agentId?: string;
+  agentIds?: string[];
 };
 
 async function getBody(request: Request): Promise<AgentAllowRequest> {
@@ -20,9 +28,18 @@ async function getBody(request: Request): Promise<AgentAllowRequest> {
   }
 }
 
-export async function POST(request: Request): Promise<NextResponse<AgentAllowResponse | ErrorResponse>> {
+export async function POST(
+  request: Request
+): Promise<NextResponse<AgentAllowResponse | AgentAllowSyncResponse | ErrorResponse>> {
   try {
     const body = await getBody(request);
+    const agentIds = parseAgentIds(body.agentIds);
+
+    if (agentIds.length > 0) {
+      const result = await ensureAllowIncludes(agentIds);
+      return NextResponse.json(result);
+    }
+
     const agentId = parseAgentId(body.agentId);
 
     if (!agentId) {

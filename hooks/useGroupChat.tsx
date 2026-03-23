@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { nanoid } from "nanoid";
 import { useGateway } from "./useGateway";
 import { extractTextContent } from "@/lib/contentBlocks";
 import type { AgentEvent, ChatEvent } from "@/lib/gateway-types";
@@ -54,6 +55,37 @@ type GroupMessagesResponse = {
 };
 
 const GroupChatContext = createContext<GroupChatContextType | null>(null);
+
+function normalizeStateValue(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.trim().toLowerCase();
+}
+
+function isTerminalSuccess(event: ChatEvent): boolean {
+  const state = normalizeStateValue(event.state);
+  if (state === "final" || state === "completed" || state === "success" || state === "done") {
+    return true;
+  }
+
+  const status = normalizeStateValue((event as unknown as { status?: string }).status);
+  return status === "completed" || status === "success" || status === "done" || status === "final";
+}
+
+function isTerminalFailure(event: ChatEvent): boolean {
+  const state = normalizeStateValue(event.state);
+  if (state === "aborted" || state === "error" || state === "failed" || state === "cancelled") {
+    return true;
+  }
+
+  const status = normalizeStateValue((event as unknown as { status?: string }).status);
+  return (
+    status === "aborted" ||
+    status === "error" ||
+    status === "failed" ||
+    status === "cancelled" ||
+    status === "canceled"
+  );
+}
 
 function safeParseMessageContent(message: ChatEvent["message"]): string {
   if (!message) return "";
@@ -363,11 +395,6 @@ export function GroupChatProvider({
           const sessionKey = buildMemberSessionKey(member, groupId);
 
           try {
-            const result = await client.chatSend({
-              sessionKey,
-              message: finalMessage,
-            });
-
             agentToSessionKeyRef.current.set(member.agentId, sessionKey);
             sessionKeyToAgentRef.current.set(sessionKey, member.agentId);
 
@@ -376,22 +403,44 @@ export function GroupChatProvider({
               next.set(member.agentId, {
                 isStreaming: true,
                 content: "",
+                runId: null,
+              });
+              return next;
+            });
+
+            const result = await client.chatSend({
+              sessionKey,
+              message: finalMessage,
+              idempotencyKey: nanoid(),
+            });
+
+            setStreamingMapState((prev) => {
+              const next = new Map(prev);
+              next.set(member.agentId, {
+                ...(next.get(member.agentId) ?? {
+                  isStreaming: true,
+                  content: "",
+                }),
                 runId: result.runId,
               });
               return next;
             });
           } catch (err) {
             console.error(`[GroupChat] Failed to send message to ${member.agentId}:`, err);
+            setStreamingMapState((prev) => {
+              const next = new Map(prev);
+              next.delete(member.agentId);
+              return next;
+            });
+            agentToSessionKeyRef.current.delete(member.agentId);
+            sessionKeyToAgentRef.current.delete(sessionKey);
+            toolCallsRef.current.delete(member.agentId);
           }
         })
       );
     },
     [client, fetchMessages, groupId, isConnected, setStreamingMapState]
   );
-
-  useEffect(() => {
-    void fetchGroupData();
-  }, [fetchGroupData]);
 
   useEffect(() => {
     membersRef.current = members;
@@ -409,9 +458,9 @@ export function GroupChatProvider({
       const streamState = streamingMapRef.current.get(agentId);
       if (!streamState) return;
 
-      const state = event.state;
-      const isCompleted = state === "final" || (event as unknown as { status?: string }).status === "completed";
-      const shouldValidateRunId = isCompleted || state === "aborted" || state === "error";
+      const isCompleted = isTerminalSuccess(event);
+      const isFailed = isTerminalFailure(event);
+      const shouldValidateRunId = isCompleted || isFailed;
       if (shouldValidateRunId && streamState.runId && event.runId !== streamState.runId) {
         return;
       }
@@ -440,7 +489,7 @@ export function GroupChatProvider({
         return;
       }
 
-      if (state === "aborted" || state === "error") {
+      if (isFailed) {
         setStreamingMapState((prev) => {
           const next = new Map(prev);
           next.delete(agentId);
@@ -503,6 +552,7 @@ export function GroupChatProvider({
     setHasMoreMessages(false);
     setIsLoadingMore(false);
     groupFetchAbortRef.current?.abort();
+    void fetchGroupData();
 
     return () => {
       void abortStream();
@@ -516,7 +566,7 @@ export function GroupChatProvider({
       groupFetchAbortRef.current?.abort();
       groupFetchAbortRef.current = null;
     };
-  }, [groupId, abortStream, setStreamingMapState]);
+  }, [groupId, abortStream, fetchGroupData, setStreamingMapState]);
 
   const value = useMemo<GroupChatContextType>(
     () => ({

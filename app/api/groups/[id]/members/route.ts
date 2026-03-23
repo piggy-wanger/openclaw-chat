@@ -3,6 +3,7 @@ import { db, groups, groupMembers } from "@/db";
 import { and, asc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { ErrorResponse } from "@/lib/types";
+import { ensureAllowIncludes } from "@/lib/server/agent-allow";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -155,6 +156,12 @@ export async function POST(
       tx.insert(groupMembers).values(member).run();
       tx.update(groups).set({ updatedAt: now }).where(eq(groups.id, id)).run();
     });
+
+    try {
+      await ensureAllowIncludes([member.agentId]);
+    } catch (allowError) {
+      console.warn(`[groups.members] Failed to ensure allow for ${member.agentId}:`, allowError);
+    }
 
     return NextResponse.json({ member });
   } catch (error) {

@@ -47,6 +47,45 @@ type SessionContextType = {
 const SessionContext = createContext<SessionContextType | null>(null);
 const GROUP_SESSIONS_STORAGE_KEY = "openclaw.groupSessions.v1";
 
+function buildGroupInitPrompt(opts: {
+  groupId: string;
+  groupName: string;
+  members: Array<{ agentId: string; name: string; emoji?: string }>;
+  selfAgentId: string;
+}): string {
+  const memberLine = opts.members
+    .map((member) => `${member.emoji?.trim() || "🤖"} ${member.name}(${member.agentId})`)
+    .join("、");
+  const selfMember = opts.members.find((member) => member.agentId === opts.selfAgentId);
+  const selfLine = `${selfMember?.emoji?.trim() || "🤖"} ${selfMember?.name || opts.selfAgentId}(${opts.selfAgentId})`;
+
+  return [
+    "系统初始化：你现在在一个群组会话中。",
+    `群组名称：${opts.groupName}`,
+    `群组成员：${memberLine}`,
+    `你的身份：${selfLine}`,
+    "",
+    "你可以在需要时查询群组历史，接口如下：",
+    `GET /api/groups/${opts.groupId}/history`,
+    `GET http://127.0.0.1:3000/api/groups/${opts.groupId}/history`,
+    "",
+    "可用查询参数：",
+    "- format=text（默认）或 format=json",
+    "- senderId=agentId",
+    "- keyword=关键词",
+    "- before=时间戳",
+    "- maxChars=30000",
+    "",
+    "使用规则：",
+    "1. 当问题依赖历史上下文时，先查询再回答。",
+    "2. 只引用必要信息，不要粘贴完整历史。",
+    "3. 若返回 truncated=true，缩小范围再查。",
+    "",
+    "上下文过长时可用 /compact 压缩上下文。",
+    "这是一条系统初始化消息，不需要回复用户。",
+  ].join("\n");
+}
+
 function isGroupSession(session: Session): boolean {
   return session.type === "group" && typeof session.groupId === "string" && session.groupId.trim().length > 0;
 }
@@ -290,19 +329,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         };
         const agentMap = new Map((config.agents?.list ?? []).map((agent) => [agent.id, agent]));
 
+        const normalizedMembers = agentIds.map((agentId) => {
+          const agent = agentMap.get(agentId);
+          return {
+            agentId,
+            name: agent?.identity?.name || agentId,
+            emoji: agent?.identity?.emoji,
+          };
+        });
+
         const createGroupRes = await fetch("/api/groups", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: groupName,
-            members: agentIds.map((agentId) => {
-              const agent = agentMap.get(agentId);
-              return {
-                agentId,
-                name: agent?.identity?.name || agentId,
-                emoji: agent?.identity?.emoji,
-              };
-            }),
+            members: normalizedMembers,
           }),
         });
 
@@ -316,6 +357,31 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const groupId = createGroupData.group?.id;
         if (!groupId) {
           throw new Error("Group ID missing from createGroup response");
+        }
+
+        const initTasks = normalizedMembers.map(async (member) => {
+          const sessionKey = `agent:${member.agentId}:${groupId}`;
+          const initPrompt = buildGroupInitPrompt({
+            groupId,
+            groupName,
+            members: normalizedMembers,
+            selfAgentId: member.agentId,
+          });
+
+          await client.chatSend({
+            sessionKey,
+            message: initPrompt,
+            idempotencyKey: nanoid(),
+          });
+        });
+
+        const initResults = await Promise.allSettled(initTasks);
+        for (let i = 0; i < initResults.length; i += 1) {
+          const result = initResults[i];
+          if (result.status === "rejected") {
+            const member = normalizedMembers[i];
+            console.warn(`[Session] Failed to initialize group context for ${member.agentId}:`, result.reason);
+          }
         }
 
         // 使用第一个 agent 作为主 agent 的会话 key，确保可与后续聊天会话 key 对齐
@@ -496,7 +562,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!isConnected) {
       // 断开连接时重置 ref 并清空会话列表，下次连接时可重新 fetch
       hasFetchedRef.current = false;
-      setSessions([]);
+      setSessions(loadStoredGroupSessions());
     }
   }, [isConnected, fetchSessions]);
 
