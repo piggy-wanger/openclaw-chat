@@ -3,6 +3,9 @@ import { db, groups, groupMembers } from "@/db";
 import { desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { ErrorResponse } from "@/lib/types";
+import { updateAllow } from "@/lib/server/agent-allow";
+
+export const runtime = "nodejs";
 
 type GroupMemberInput = {
   agentId: string;
@@ -98,11 +101,11 @@ export async function POST(request: Request): Promise<NextResponse<GroupResponse
       updatedAt: now,
     };
 
-    await db.transaction(async (tx) => {
-      await tx.insert(groups).values(newGroup);
+    db.transaction((tx) => {
+      tx.insert(groups).values(newGroup).run();
 
       if (members.length > 0) {
-        await tx.insert(groupMembers).values(
+        tx.insert(groupMembers).values(
           members.map((member, index) => ({
             id: nanoid(),
             groupId,
@@ -114,9 +117,19 @@ export async function POST(request: Request): Promise<NextResponse<GroupResponse
             order: index,
             createdAt: now,
           }))
-        );
+        ).run();
       }
     });
+
+    await Promise.all(
+      memberAgentIds.map(async (agentId) => {
+        try {
+          await updateAllow(agentId, "add");
+        } catch (allowError) {
+          console.warn(`[groups] Failed to ensure agent allow for ${agentId}:`, allowError);
+        }
+      })
+    );
 
     return NextResponse.json({
       group: newGroup,

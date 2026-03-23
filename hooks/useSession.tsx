@@ -45,6 +45,49 @@ type SessionContextType = {
 
 // Context
 const SessionContext = createContext<SessionContextType | null>(null);
+const GROUP_SESSIONS_STORAGE_KEY = "openclaw.groupSessions.v1";
+
+function isGroupSession(session: Session): boolean {
+  return session.type === "group" && typeof session.groupId === "string" && session.groupId.trim().length > 0;
+}
+
+function loadStoredGroupSessions(): Session[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(GROUP_SESSIONS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((item): item is Session => {
+        if (!item || typeof item !== "object") return false;
+        const candidate = item as Session;
+        return (
+          typeof candidate.id === "string" &&
+          typeof candidate.title === "string" &&
+          candidate.type === "group" &&
+          typeof candidate.groupId === "string" &&
+          typeof candidate.model === "string" &&
+          typeof candidate.createdAt === "number" &&
+          typeof candidate.updatedAt === "number"
+        );
+      })
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  } catch {
+    return [];
+  }
+}
+
+function persistGroupSessions(sessions: Session[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    const groupsOnly = sessions.filter(isGroupSession);
+    window.localStorage.setItem(GROUP_SESSIONS_STORAGE_KEY, JSON.stringify(groupsOnly));
+  } catch (err) {
+    console.warn("[Session] Failed to persist group sessions:", err);
+  }
+}
 
 // 将 SessionEntry 转换为 Session
 function sessionEntryToSession(entry: SessionEntry): Session {
@@ -103,7 +146,7 @@ export function extractSessionDisplayName(sessionKey: string): string {
 // Provider
 export function SessionProvider({ children }: { children: ReactNode }) {
   const { client, isConnected } = useGateway();
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessions, setSessions] = useState<Session[]>(() => loadStoredGroupSessions());
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +177,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         .map(sessionEntryToSession)
         .sort((a, b) => b.updatedAt - a.updatedAt);
 
-      setSessions(sessionList);
+      const localGroupSessions = loadStoredGroupSessions();
+      const mergedMap = new Map<string, Session>(sessionList.map((session) => [session.id, session]));
+
+      for (const localSession of localGroupSessions) {
+        const existing = mergedMap.get(localSession.id);
+        if (!existing) {
+          mergedMap.set(localSession.id, localSession);
+          continue;
+        }
+
+        if (existing.type === "group") {
+          mergedMap.set(localSession.id, {
+            ...localSession,
+            ...existing,
+            groupId: existing.groupId ?? localSession.groupId,
+            title: existing.title || localSession.title,
+          });
+        }
+      }
+
+      setSessions(Array.from(mergedMap.values()).sort((a, b) => b.updatedAt - a.updatedAt));
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to fetch sessions";
@@ -337,8 +400,44 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       setError(null);
       try {
-        // 调用 Gateway sessions.delete
-        await client.sessionsDelete(id);
+        const targetSession = sessions.find((session) => session.id === id);
+
+        if (targetSession?.type === "group" && targetSession.groupId) {
+          try {
+            const membersRes = await fetch(`/api/groups/${targetSession.groupId}/members`, {
+              cache: "no-store",
+            });
+            const membersData = membersRes.ok
+              ? ((await membersRes.json()) as { members?: Array<{ agentId: string; sessionKey?: string | null }> })
+              : { members: [] };
+            const members = Array.isArray(membersData.members) ? membersData.members : [];
+
+            const sessionKeys = new Set<string>([id]);
+            for (const member of members) {
+              if (member.sessionKey?.trim()) {
+                sessionKeys.add(member.sessionKey.trim());
+              } else if (member.agentId?.trim()) {
+                sessionKeys.add(`agent:${member.agentId.trim()}:${targetSession.groupId}`);
+              }
+            }
+
+            await Promise.allSettled(
+              Array.from(sessionKeys).map(async (sessionKey) => {
+                await client.sessionsDelete(sessionKey);
+              })
+            );
+          } catch (cleanupErr) {
+            console.warn("[Session] Failed to cleanup group sessions:", cleanupErr);
+          }
+
+          try {
+            await fetch(`/api/groups/${targetSession.groupId}`, { method: "DELETE" });
+          } catch (deleteGroupErr) {
+            console.warn("[Session] Failed to delete group record:", deleteGroupErr);
+          }
+        } else {
+          await client.sessionsDelete(id);
+        }
 
         // 从列表中移除
         setSessions((prev) => prev.filter((s) => s.id !== id));
@@ -400,6 +499,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setSessions([]);
     }
   }, [isConnected, fetchSessions]);
+
+  useEffect(() => {
+    persistGroupSessions(sessions);
+  }, [sessions]);
 
   return (
     <SessionContext.Provider

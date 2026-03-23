@@ -36,11 +36,12 @@ export async function DELETE(
       );
     }
 
-    await db.transaction(async (tx) => {
-      await tx
+    db.transaction((tx) => {
+      tx
         .delete(groupMessages)
-        .where(and(eq(groupMessages.groupId, id), eq(groupMessages.id, msgId)));
-      await tx.update(groups).set({ updatedAt: Date.now() }).where(eq(groups.id, id));
+        .where(and(eq(groupMessages.groupId, id), eq(groupMessages.id, msgId))
+        ).run();
+      tx.update(groups).set({ updatedAt: Date.now() }).where(eq(groups.id, id)).run();
     });
 
     return NextResponse.json({ success: true });

@@ -215,9 +215,9 @@ export async function POST(
       createdAt: now,
     };
 
-    await db.transaction(async (tx) => {
-      await tx.insert(groupMessages).values(message);
-      await tx.update(groups).set({ updatedAt: now }).where(eq(groups.id, id));
+    db.transaction((tx) => {
+      tx.insert(groupMessages).values(message).run();
+      tx.update(groups).set({ updatedAt: now }).where(eq(groups.id, id)).run();
     });
 
     return NextResponse.json({ message });

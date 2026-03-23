@@ -151,9 +151,9 @@ export async function POST(
       createdAt: now,
     };
 
-    await db.transaction(async (tx) => {
-      await tx.insert(groupMembers).values(member);
-      await tx.update(groups).set({ updatedAt: now }).where(eq(groups.id, id));
+    db.transaction((tx) => {
+      tx.insert(groupMembers).values(member).run();
+      tx.update(groups).set({ updatedAt: now }).where(eq(groups.id, id)).run();
     });
 
     return NextResponse.json({ member });
@@ -249,12 +249,13 @@ export async function PATCH(
     }
 
     const now = Date.now();
-    await db.transaction(async (tx) => {
-      await tx
+    db.transaction((tx) => {
+      tx
         .update(groupMembers)
         .set(updateData)
-        .where(and(eq(groupMembers.groupId, id), eq(groupMembers.agentId, targetAgentId)));
-      await tx.update(groups).set({ updatedAt: now }).where(eq(groups.id, id));
+        .where(and(eq(groupMembers.groupId, id), eq(groupMembers.agentId, targetAgentId)))
+        .run();
+      tx.update(groups).set({ updatedAt: now }).where(eq(groups.id, id)).run();
     });
 
     const updatedMember = await db
@@ -313,11 +314,12 @@ export async function DELETE(
     }
 
     const now = Date.now();
-    await db.transaction(async (tx) => {
-      await tx
+    db.transaction((tx) => {
+      tx
         .delete(groupMembers)
-        .where(and(eq(groupMembers.groupId, id), eq(groupMembers.agentId, targetAgentId)));
-      await tx.update(groups).set({ updatedAt: now }).where(eq(groups.id, id));
+        .where(and(eq(groupMembers.groupId, id), eq(groupMembers.agentId, targetAgentId)))
+        .run();
+      tx.update(groups).set({ updatedAt: now }).where(eq(groups.id, id)).run();
     });
 
     return NextResponse.json({ success: true });
