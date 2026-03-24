@@ -107,12 +107,12 @@ export async function POST(request: Request): Promise<NextResponse<GroupResponse
       if (members.length > 0) {
         tx.insert(groupMembers).values(
           members.map((member, index) => ({
+            agentId: member.agentId.trim(),
+            sessionKey: member.sessionKey?.trim() || `agent:${member.agentId.trim()}:${groupId}`,
             id: nanoid(),
             groupId,
-            agentId: member.agentId.trim(),
             name: member.name.trim(),
             emoji: member.emoji ?? null,
-            sessionKey: member.sessionKey ?? null,
             role: "member" as const,
             order: index,
             createdAt: now,

@@ -98,14 +98,35 @@ function isGroupSession(session: Session): boolean {
   return session.type === "group" && typeof session.groupId === "string" && session.groupId.trim().length > 0;
 }
 
-function isGroupMemberSessionKey(sessionKey: string, groupIds: Set<string>): boolean {
-  if (!sessionKey || groupIds.size === 0) return false;
-  const parts = sessionKey.split(":");
-  if (parts.length < 3) return false;
-  if (parts[0] !== "agent") return false;
-  // 兼容 agent:<agentId>:<groupId>[:suffix...]，只要第 3 段命中 groupId 即视为群组成员会话
-  const groupId = parts[2]?.trim();
-  return Boolean(groupId && groupIds.has(groupId));
+function isGroupMemberSessionKey(
+  sessionKey: string,
+  groupIds: Set<string>,
+  groupMemberSessionKeys: Set<string>
+): boolean {
+  if (!sessionKey) return false;
+
+  const normalizedKey = sessionKey.trim();
+  if (!normalizedKey) return false;
+
+  // 精确命中或命中已知 sessionKey 的派生后缀（如 :<nanoid>）
+  for (const memberSessionKey of groupMemberSessionKeys) {
+    if (normalizedKey === memberSessionKey || normalizedKey.startsWith(`${memberSessionKey}:`)) {
+      return true;
+    }
+  }
+
+  if (groupIds.size === 0) return false;
+  const parts = normalizedKey.split(":").map((part) => part.trim());
+  if (parts.length < 3 || parts[0] !== "agent") return false;
+
+  // 兼容 agent:<agentId>:<groupId>[:suffix...]，并放宽到第 3 段之后任一段命中 groupId
+  for (let i = 2; i < parts.length; i += 1) {
+    if (groupIds.has(parts[i])) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function loadStoredGroupSessions(): Session[] {
@@ -229,6 +250,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           .map((session) => session.groupId?.trim())
           .filter((id): id is string => Boolean(id))
       );
+      const knownGroupMemberSessionKeys = new Set<string>();
 
       try {
         const groupsRes = await fetch("/api/groups", { cache: "no-store" });
@@ -241,6 +263,40 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             const groupId = group.id?.trim();
             if (groupId) {
               knownGroupIds.add(groupId);
+            }
+          }
+
+          const memberResults = await Promise.allSettled(
+            groups
+              .map((group) => group.id?.trim())
+              .filter((groupId): groupId is string => Boolean(groupId))
+              .map(async (groupId) => {
+                const membersRes = await fetch(`/api/groups/${groupId}/members`, {
+                  cache: "no-store",
+                });
+                if (!membersRes.ok) return;
+
+                const membersData = (await membersRes.json()) as {
+                  members?: Array<{ agentId?: string; sessionKey?: string | null }>;
+                };
+                const members = Array.isArray(membersData.members) ? membersData.members : [];
+                for (const member of members) {
+                  const agentId = member.agentId?.trim();
+                  if (!agentId) continue;
+
+                  const explicitSessionKey = member.sessionKey?.trim();
+                  const canonicalSessionKey = `agent:${agentId}:${groupId}`;
+                  if (explicitSessionKey) {
+                    knownGroupMemberSessionKeys.add(explicitSessionKey);
+                  }
+                  knownGroupMemberSessionKeys.add(canonicalSessionKey);
+                }
+              })
+          );
+
+          for (const result of memberResults) {
+            if (result.status === "rejected") {
+              console.warn("[Session] Failed to fetch group members for session filtering:", result.reason);
             }
           }
         }
@@ -256,7 +312,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // 转换为 Session 类型并按 updatedAt 降序排列
       const sessionList = entries
         .filter(e => e.origin != null)
-        .filter((entry) => !isGroupMemberSessionKey(entry.key, knownGroupIds))
+        .filter((entry) => !isGroupMemberSessionKey(entry.key, knownGroupIds, knownGroupMemberSessionKeys))
         .map(sessionEntryToSession)
         .sort((a, b) => b.updatedAt - a.updatedAt);
       const mergedMap = new Map<string, Session>(sessionList.map((session) => [session.id, session]));
@@ -268,14 +324,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           continue;
         }
 
-        if (existing.type === "group") {
-          mergedMap.set(localSession.id, {
-            ...localSession,
-            ...existing,
-            groupId: existing.groupId ?? localSession.groupId,
-            title: existing.title || localSession.title,
-          });
-        }
+        mergedMap.set(localSession.id, {
+          ...existing,
+          ...localSession,
+          type: "group",
+          groupId: localSession.groupId ?? existing.groupId,
+          title: localSession.title || existing.title,
+        });
       }
 
       setSessions(Array.from(mergedMap.values()).sort((a, b) => b.updatedAt - a.updatedAt));

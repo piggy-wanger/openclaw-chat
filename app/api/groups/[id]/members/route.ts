@@ -141,12 +141,12 @@ export async function POST(
     }
 
     const member = {
+      agentId: body.agentId.trim(),
+      sessionKey: body.sessionKey?.trim() || `agent:${body.agentId.trim()}:${id}`,
       id: nanoid(),
       groupId: id,
-      agentId: body.agentId.trim(),
       name: body.name.trim(),
       emoji: body.emoji ?? null,
-      sessionKey: body.sessionKey ?? null,
       role: body.role ?? ("member" as const),
       order: body.order ?? 0,
       createdAt: now,
