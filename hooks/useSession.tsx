@@ -429,8 +429,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const normalizedSessionName = options.sessionName?.trim() || undefined;
       const { agentId, model } = options;
 
-      // 构建 sessionKey: <agentId>:<sessionId>
-      const sessionKey = `${agentId}:${normalizedSessionId}`;
+      // Gateway 兼容的 sessionKey 需要带 agent: 前缀；
+      // 为避免同名会话冲突，沿用随机后缀。
+      const sessionKey = `agent:${agentId}:${normalizedSessionId}:${nanoid(6)}`;
 
       const tempSession: Session = {
         id: sessionKey,
@@ -443,7 +444,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       };
 
       // 添加到列表并设为当前会话
-      setSessions((prev) => [tempSession, ...prev.filter((s) => s.id !== sessionKey)]);
+      setSessions((prev) => [tempSession, ...prev]);
       setCurrentSessionId(tempSession.id);
 
       return tempSession;
