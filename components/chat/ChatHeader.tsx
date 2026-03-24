@@ -216,6 +216,7 @@ export function ChatHeader({
               <Settings className="h-4 w-4" />
             </Button>
           )}
+          {!isGroup && (
           <Select value={currentModel} onValueChange={onModelChange}>
             <SelectTrigger className="w-[180px] bg-muted border-border text-foreground">
               <SelectValue placeholder="选择模型" />
@@ -242,6 +243,7 @@ export function ChatHeader({
               )}
             </SelectContent>
           </Select>
+          )}
         </div>
       )}
 
