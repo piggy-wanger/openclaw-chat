@@ -152,7 +152,7 @@ function GroupMessageItemInner({ message, isOnline = true }: GroupMessageItemPro
         </div>
 
         <div className="bg-muted text-foreground rounded-2xl rounded-tl-sm px-4 py-2.5">
-          <MarkdownRenderer content={message.content} />
+          <MarkdownRenderer content={message.content} highlightGroupMentions />
         </div>
 
         {toolCalls.length > 0 && (

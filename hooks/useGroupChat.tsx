@@ -10,7 +10,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { nanoid } from "nanoid";
 import { useGateway } from "./useGateway";
 import { extractTextContent } from "@/lib/contentBlocks";
 import { extractMentionedAgentIds } from "@/lib/mentions";
@@ -56,12 +55,36 @@ type GroupMessagesResponse = {
 };
 
 const GroupChatContext = createContext<GroupChatContextType | null>(null);
-const MAX_MENTION_CHAIN_DEPTH = 3;
+const MAX_MENTION_HOPS = 3;
+const MENTION_TRIGGER_COOLDOWN_MS = 15_000;
 
 type MentionChainState = {
   depth: number;
   visitedAgentIds: Set<string>;
 };
+
+function toSortedJoinedAgentIds(visitedAgentIds: Set<string>): string {
+  return Array.from(visitedAgentIds)
+    .map((agentId) => agentId.trim())
+    .filter(Boolean)
+    .sort()
+    .join(",");
+}
+
+function buildChainIdempotencyKey(opts: {
+  groupId: string;
+  targetAgentId: string;
+  sourceRunId?: string;
+  sourceAgentId?: string;
+  depth: number;
+  visitedAgentIds: Set<string>;
+}): string {
+  const visited = toSortedJoinedAgentIds(opts.visitedAgentIds);
+  const sourceRun = opts.sourceRunId?.trim() || "user";
+  const sourceAgent = opts.sourceAgentId?.trim() || "user";
+  const raw = `group:${opts.groupId}|fromRun:${sourceRun}|fromAgent:${sourceAgent}|to:${opts.targetAgentId}|hop:${opts.depth}|visited:${visited}`;
+  return raw.slice(0, 240);
+}
 
 function normalizeStateValue(value: unknown): string {
   if (typeof value !== "string") return "";
@@ -172,6 +195,7 @@ export function GroupChatProvider({
   const sessionKeyToAgentRef = useRef<Map<string, string>>(new Map());
   const runIdToAgentRef = useRef<Map<string, string>>(new Map());
   const runMentionChainRef = useRef<Map<string, MentionChainState>>(new Map());
+  const mentionCooldownRef = useRef<Map<string, number>>(new Map());
   const toolCallsRef = useRef<Map<string, unknown[]>>(new Map());
   const completedRunsRef = useRef<Set<string>>(new Set());
   const groupFetchEpochRef = useRef(0);
@@ -344,14 +368,121 @@ export function GroupChatProvider({
         sessionKeyToAgentRef.current.clear();
         runIdToAgentRef.current.clear();
         runMentionChainRef.current.clear();
+        mentionCooldownRef.current.clear();
         toolCallsRef.current.clear();
       }
     },
     [client, isConnected, setStreamingMapState]
   );
 
+  const dispatchToAgents = useCallback(
+    async (opts: {
+      message: string;
+      targetMembers: GroupMember[];
+      mentionChain?: MentionChainState;
+      sourceRunId?: string;
+      sourceAgentId?: string;
+      isMentionCascade?: boolean;
+    }) => {
+      if (!groupId || !isConnected) return;
+      const message = opts.message.trim();
+      if (!message || opts.targetMembers.length === 0) return;
+
+      const now = Date.now();
+      const chain = opts.mentionChain ?? { depth: 0, visitedAgentIds: new Set<string>() };
+      const nextDepth = opts.isMentionCascade ? chain.depth + 1 : chain.depth;
+
+      await Promise.all(
+        opts.targetMembers.map(async (member) => {
+          const targetAgentId = member.agentId;
+          const visitedWithTarget = new Set(chain.visitedAgentIds);
+          visitedWithTarget.add(targetAgentId);
+
+          if (opts.isMentionCascade) {
+            const lastTriggeredAt = mentionCooldownRef.current.get(targetAgentId) ?? 0;
+            if (now - lastTriggeredAt < MENTION_TRIGGER_COOLDOWN_MS) {
+              return;
+            }
+          }
+
+          const sessionKey = buildMemberSessionKey(member, groupId);
+          const idempotencyKey = buildChainIdempotencyKey({
+            groupId,
+            targetAgentId,
+            sourceRunId: opts.sourceRunId,
+            sourceAgentId: opts.sourceAgentId,
+            depth: nextDepth,
+            visitedAgentIds: visitedWithTarget,
+          });
+
+          try {
+            agentToSessionKeyRef.current.set(targetAgentId, sessionKey);
+            sessionKeyToAgentRef.current.set(sessionKey, targetAgentId);
+
+            setStreamingMapState((prev) => {
+              const next = new Map(prev);
+              next.set(targetAgentId, {
+                isStreaming: true,
+                content: "",
+                runId: null,
+              });
+              return next;
+            });
+
+            if (opts.isMentionCascade) {
+              mentionCooldownRef.current.set(targetAgentId, now);
+            }
+
+            const result = await client.chatSend({
+              sessionKey,
+              message,
+              idempotencyKey,
+            });
+
+            setStreamingMapState((prev) => {
+              const next = new Map(prev);
+              next.set(targetAgentId, {
+                ...(next.get(targetAgentId) ?? {
+                  isStreaming: true,
+                  content: "",
+                }),
+                runId: result.runId,
+              });
+              return next;
+            });
+
+            runIdToAgentRef.current.set(result.runId, targetAgentId);
+            runMentionChainRef.current.set(result.runId, {
+              depth: nextDepth,
+              visitedAgentIds: visitedWithTarget,
+            });
+          } catch (err) {
+            console.error(`[GroupChat] Failed to dispatch message to ${targetAgentId}:`, err);
+            if (opts.isMentionCascade) {
+              mentionCooldownRef.current.delete(targetAgentId);
+            }
+            setStreamingMapState((prev) => {
+              const next = new Map(prev);
+              next.delete(targetAgentId);
+              return next;
+            });
+            agentToSessionKeyRef.current.delete(targetAgentId);
+            sessionKeyToAgentRef.current.delete(sessionKey);
+            toolCallsRef.current.delete(targetAgentId);
+          }
+        })
+      );
+    },
+    [client, groupId, isConnected, setStreamingMapState]
+  );
+
   const persistAgentReply = useCallback(
-    async (opts: { agentId: string; runId: string; content: string }) => {
+    async (opts: {
+      agentId: string;
+      runId: string;
+      content: string;
+      mentionChain: MentionChainState;
+    }) => {
       if (!groupId || !opts.content.trim()) return;
 
       const member = membersRef.current.find((m) => m.agentId === opts.agentId);
@@ -378,111 +509,44 @@ export function GroupChatProvider({
         console.error("[GroupChat] Failed to persist assistant reply:", err);
       }
 
+      const trimmedContent = opts.content.trim();
+      if (trimmedContent && opts.mentionChain.depth < MAX_MENTION_HOPS) {
+        const membersList = [...membersRef.current];
+        const mentionedAgentIds = extractMentionedAgentIds(
+          trimmedContent,
+          membersList.map((currentMember) => ({
+            id: currentMember.agentId,
+            name: currentMember.name,
+          }))
+        );
+
+        if (mentionedAgentIds.length > 0) {
+          const memberByAgentId = new Map(
+            membersList.map((currentMember) => [currentMember.agentId, currentMember])
+          );
+          const targetMembers = mentionedAgentIds
+            .filter((agentId) => agentId !== opts.agentId)
+            .filter((agentId) => !opts.mentionChain.visitedAgentIds.has(agentId))
+            .map((agentId) => memberByAgentId.get(agentId))
+            .filter((currentMember): currentMember is GroupMember => Boolean(currentMember));
+
+          if (targetMembers.length > 0) {
+            await dispatchToAgents({
+              message: trimmedContent,
+              targetMembers,
+              mentionChain: opts.mentionChain,
+              sourceRunId: opts.runId,
+              sourceAgentId: opts.agentId,
+              isMentionCascade: true,
+            });
+          }
+        }
+      }
+
       toolCallsRef.current.delete(opts.agentId);
       await fetchMessages();
     },
-    [fetchMessages, groupId]
-  );
-
-  const triggerMentionedAgentsReply = useCallback(
-    async (opts: {
-      sourceAgentId: string;
-      sourceRunId: string;
-      content: string;
-    }) => {
-      if (!groupId || !isConnected) return;
-      const content = opts.content.trim();
-      if (!content) return;
-
-      const membersList = [...membersRef.current];
-      if (membersList.length === 0) return;
-
-      const mentionedAgentIds = extractMentionedAgentIds(
-        content,
-        membersList.map((member) => ({
-          id: member.agentId,
-          name: member.name,
-        }))
-      );
-
-      if (mentionedAgentIds.length === 0) return;
-
-      const sourceChain = runMentionChainRef.current.get(opts.sourceRunId) ?? {
-        depth: 0,
-        visitedAgentIds: new Set([opts.sourceAgentId]),
-      };
-
-      if (sourceChain.depth >= MAX_MENTION_CHAIN_DEPTH) return;
-
-      const pendingTargets = mentionedAgentIds
-        .filter((agentId) => agentId !== opts.sourceAgentId)
-        .filter((agentId) => !sourceChain.visitedAgentIds.has(agentId));
-      if (pendingTargets.length === 0) return;
-
-      const memberByAgentId = new Map(membersList.map((member) => [member.agentId, member]));
-
-      await Promise.all(
-        pendingTargets.map(async (targetAgentId) => {
-          const member = memberByAgentId.get(targetAgentId);
-          if (!member) return;
-
-          const sessionKey = buildMemberSessionKey(member, groupId);
-
-          try {
-            agentToSessionKeyRef.current.set(targetAgentId, sessionKey);
-            sessionKeyToAgentRef.current.set(sessionKey, targetAgentId);
-
-            setStreamingMapState((prev) => {
-              const next = new Map(prev);
-              next.set(targetAgentId, {
-                isStreaming: true,
-                content: "",
-                runId: null,
-              });
-              return next;
-            });
-
-            const result = await client.chatSend({
-              sessionKey,
-              message: content,
-              idempotencyKey: nanoid(),
-            });
-
-            setStreamingMapState((prev) => {
-              const next = new Map(prev);
-              next.set(targetAgentId, {
-                ...(next.get(targetAgentId) ?? {
-                  isStreaming: true,
-                  content: "",
-                }),
-                runId: result.runId,
-              });
-              return next;
-            });
-
-            runIdToAgentRef.current.set(result.runId, targetAgentId);
-
-            const visitedAgentIds = new Set(sourceChain.visitedAgentIds);
-            visitedAgentIds.add(targetAgentId);
-            runMentionChainRef.current.set(result.runId, {
-              depth: sourceChain.depth + 1,
-              visitedAgentIds,
-            });
-          } catch (err) {
-            console.error(`[GroupChat] Failed to trigger mention reply for ${targetAgentId}:`, err);
-            setStreamingMapState((prev) => {
-              const next = new Map(prev);
-              next.delete(targetAgentId);
-              return next;
-            });
-            agentToSessionKeyRef.current.delete(targetAgentId);
-            sessionKeyToAgentRef.current.delete(sessionKey);
-            toolCallsRef.current.delete(targetAgentId);
-          }
-        })
-      );
-    },
-    [client, groupId, isConnected, setStreamingMapState]
+    [dispatchToAgents, fetchMessages, groupId]
   );
 
   const sendMessage = useCallback(
@@ -528,62 +592,12 @@ export function GroupChatProvider({
       // const contextContent = recentReplies.map(r => `[${r.senderName}]: ${r.content}`).join("\n");
       // finalMessage = contextContent + "\n---\n" + content;
       const finalMessage = trimmed;
-
-      await Promise.all(
-        targetMembers.map(async (member) => {
-          const sessionKey = buildMemberSessionKey(member, groupId);
-
-          try {
-            agentToSessionKeyRef.current.set(member.agentId, sessionKey);
-            sessionKeyToAgentRef.current.set(sessionKey, member.agentId);
-
-            setStreamingMapState((prev) => {
-              const next = new Map(prev);
-              next.set(member.agentId, {
-                isStreaming: true,
-                content: "",
-                runId: null,
-              });
-              return next;
-            });
-
-            const result = await client.chatSend({
-              sessionKey,
-              message: finalMessage,
-              idempotencyKey: nanoid(),
-            });
-
-            setStreamingMapState((prev) => {
-              const next = new Map(prev);
-              next.set(member.agentId, {
-                ...(next.get(member.agentId) ?? {
-                  isStreaming: true,
-                  content: "",
-                }),
-                runId: result.runId,
-              });
-              return next;
-            });
-            runIdToAgentRef.current.set(result.runId, member.agentId);
-            runMentionChainRef.current.set(result.runId, {
-              depth: 0,
-              visitedAgentIds: new Set([member.agentId]),
-            });
-          } catch (err) {
-            console.error(`[GroupChat] Failed to send message to ${member.agentId}:`, err);
-            setStreamingMapState((prev) => {
-              const next = new Map(prev);
-              next.delete(member.agentId);
-              return next;
-            });
-            agentToSessionKeyRef.current.delete(member.agentId);
-            sessionKeyToAgentRef.current.delete(sessionKey);
-            toolCallsRef.current.delete(member.agentId);
-          }
-        })
-      );
+      await dispatchToAgents({
+        message: finalMessage,
+        targetMembers,
+      });
     },
-    [client, fetchMessages, groupId, isConnected, setStreamingMapState]
+    [dispatchToAgents, fetchMessages, groupId, isConnected]
   );
 
   useEffect(() => {
@@ -624,16 +638,19 @@ export function GroupChatProvider({
         completedRunsRef.current.add(runKey);
 
         const content = safeParseMessageContent(event.message) || streamState.content;
+        const mentionChain = runMentionChainRef.current.get(event.runId) ?? {
+          depth: 0,
+          visitedAgentIds: new Set([agentId]),
+        };
 
         void persistAgentReply({
           agentId,
           runId: event.runId,
           content,
-        });
-        void triggerMentionedAgentsReply({
-          sourceAgentId: agentId,
-          sourceRunId: event.runId,
-          content,
+          mentionChain: {
+            depth: mentionChain.depth,
+            visitedAgentIds: new Set(mentionChain.visitedAgentIds),
+          },
         });
 
         setStreamingMapState((prev) => {
@@ -677,7 +694,7 @@ export function GroupChatProvider({
 
     const unsubscribe = client.on("chat", handleChat);
     return () => unsubscribe();
-  }, [client, persistAgentReply, setStreamingMapState, triggerMentionedAgentsReply]);
+  }, [client, persistAgentReply, setStreamingMapState]);
 
   useEffect(() => {
     const handleAgent = (event: AgentEvent) => {
@@ -724,6 +741,7 @@ export function GroupChatProvider({
     sessionKeyToAgentRef.current.clear();
     runIdToAgentRef.current.clear();
     runMentionChainRef.current.clear();
+    mentionCooldownRef.current.clear();
     toolCallsRef.current.clear();
     completedRunsRef.current.clear();
     setHasMoreMessages(false);
@@ -738,6 +756,7 @@ export function GroupChatProvider({
       sessionKeyToAgentRef.current.clear();
       runIdToAgentRef.current.clear();
       runMentionChainRef.current.clear();
+      mentionCooldownRef.current.clear();
       toolCallsRef.current.clear();
       completedRunsRef.current.clear();
       setHasMoreMessages(false);

@@ -15,11 +15,7 @@ import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { Check, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  MENTION_HIGHLIGHT_END,
-  MENTION_HIGHLIGHT_START,
-  highlightMentions,
-} from "@/lib/mentions";
+import { parseMentions } from "@/lib/mentions";
 
 type MarkdownRendererProps = {
   content: string;
@@ -138,7 +134,7 @@ function Link({
       className="text-blue-400 hover:text-blue-300 underline underline-offset-2"
       {...props}
     >
-      {renderMentionNodes(children)}
+      {children}
     </a>
   );
 }
@@ -177,35 +173,31 @@ function Td({ children, ...props }: React.HTMLAttributes<HTMLTableCellElement>) 
 }
 
 function renderMentionTextNode(text: string): ReactNode {
+  const mentions = parseMentions(text);
+  if (mentions.length === 0) return text;
+
   const parts: ReactNode[] = [];
   let cursor = 0;
   let key = 0;
-
-  while (cursor < text.length) {
-    const start = text.indexOf(MENTION_HIGHLIGHT_START, cursor);
-    if (start < 0) {
-      parts.push(text.slice(cursor));
-      break;
+  for (const mention of mentions) {
+    const mentionStart = mention.start;
+    const mentionEnd = mention.start + mention.raw.length;
+    if (mentionStart > cursor) {
+      parts.push(text.slice(cursor, mentionStart));
     }
-
-    if (start > cursor) {
-      parts.push(text.slice(cursor, start));
-    }
-
-    const contentStart = start + MENTION_HIGHLIGHT_START.length;
-    const end = text.indexOf(MENTION_HIGHLIGHT_END, contentStart);
-    if (end < 0) {
-      parts.push(text.slice(start));
-      break;
-    }
-
-    const mentionText = text.slice(contentStart, end);
     parts.push(
       <span key={`mention-${key++}`} className="text-amber-400 font-medium">
-        {mentionText}
+        {mention.text}
       </span>
     );
-    cursor = end + MENTION_HIGHLIGHT_END.length;
+    if (mention.suffix) {
+      parts.push(mention.suffix);
+    }
+    cursor = mentionEnd;
+  }
+
+  if (cursor < text.length) {
+    parts.push(text.slice(cursor));
   }
 
   return parts.length === 1 && typeof parts[0] === "string" ? parts[0] : <>{parts}</>;
@@ -220,7 +212,11 @@ function renderMentionNodes(node: ReactNode): ReactNode {
     return node.map((child) => renderMentionNodes(child));
   }
 
-  if (isValidElement<{ children?: ReactNode }>(node)) {
+  if (isValidElement<{ children?: ReactNode; node?: { tagName?: string } }>(node)) {
+    const tagName = typeof node.type === "string" ? node.type : node.props.node?.tagName;
+    if (tagName === "a" || tagName === "code" || tagName === "pre") {
+      return node;
+    }
     return cloneElement(node, undefined, renderMentionNodes(node.props.children));
   }
 
@@ -233,8 +229,6 @@ function MarkdownRendererInner({
   className,
   highlightGroupMentions = false,
 }: MarkdownRendererProps) {
-  const markdownContent = highlightGroupMentions ? highlightMentions(content) : content;
-
   return (
     <div className={cn("prose prose-invert max-w-none", className)}>
       <ReactMarkdown
@@ -246,25 +240,29 @@ function MarkdownRendererInner({
           table: Table,
           th: Th,
           td: Td,
-          li: ({ children }) => <li>{renderMentionNodes(children)}</li>,
+          li: ({ children }) => (
+            <li>{highlightGroupMentions ? renderMentionNodes(children) : children}</li>
+          ),
           // 段落样式
           p: ({ children }) => (
-            <p className="mb-3 last:mb-0">{renderMentionNodes(children)}</p>
+            <p className="mb-3 last:mb-0">
+              {highlightGroupMentions ? renderMentionNodes(children) : children}
+            </p>
           ),
           // 标题样式
           h1: ({ children }) => (
             <h1 className="text-2xl font-bold mb-3 mt-4 first:mt-0">
-              {renderMentionNodes(children)}
+              {highlightGroupMentions ? renderMentionNodes(children) : children}
             </h1>
           ),
           h2: ({ children }) => (
             <h2 className="text-xl font-bold mb-2 mt-4 first:mt-0">
-              {renderMentionNodes(children)}
+              {highlightGroupMentions ? renderMentionNodes(children) : children}
             </h2>
           ),
           h3: ({ children }) => (
             <h3 className="text-lg font-bold mb-2 mt-3 first:mt-0">
-              {renderMentionNodes(children)}
+              {highlightGroupMentions ? renderMentionNodes(children) : children}
             </h3>
           ),
           // 列表样式
@@ -277,14 +275,14 @@ function MarkdownRendererInner({
           // 引用样式
           blockquote: ({ children }) => (
             <blockquote className="border-l-4 border-border pl-4 my-3 text-muted-foreground italic">
-              {renderMentionNodes(children)}
+              {highlightGroupMentions ? renderMentionNodes(children) : children}
             </blockquote>
           ),
           // 水平线
           hr: () => <hr className="my-4 border-border" />,
         }}
       >
-        {markdownContent}
+        {content}
       </ReactMarkdown>
     </div>
   );

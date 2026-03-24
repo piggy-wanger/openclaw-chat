@@ -3,7 +3,7 @@ export type MentionableAgent = {
   name: string;
 };
 
-const MENTION_REGEX = /@([^\s@]+)/g;
+const MENTION_REGEX = /[@＠]([^\s@＠]+)/g;
 const TRAILING_PUNCTUATION_REGEX = /[.,!?;:，。！？；：、)）\]】}>》"“”'’`]+$/g;
 export const MENTION_HIGHLIGHT_START = "[[[MENTION_START]]]";
 export const MENTION_HIGHLIGHT_END = "[[[MENTION_END]]]";
