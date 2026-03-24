@@ -105,7 +105,7 @@ function isGroupMemberSessionKey(
 ): boolean {
   if (!sessionKey) return false;
 
-  const normalizedKey = sessionKey.trim();
+  const normalizedKey = sessionKey.trim().toLowerCase();
   if (!normalizedKey) return false;
 
   // 精确命中或命中已知 sessionKey 的派生后缀（如 :<nanoid>）
@@ -116,11 +116,23 @@ function isGroupMemberSessionKey(
   }
 
   if (groupIds.size === 0) return false;
-  const parts = normalizedKey.split(":").map((part) => part.trim());
-  if (parts.length < 3 || parts[0] !== "agent") return false;
+  const parts = normalizedKey.split(":").map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 2) return false;
 
-  // 兼容 agent:<agentId>:<groupId>[:suffix...]，并放宽到第 3 段之后任一段命中 groupId
-  for (let i = 2; i < parts.length; i += 1) {
+  if (parts[0] === "agent") {
+    if (parts.length < 3) return false;
+
+    // 兼容 agent:<agentId>:<groupId>[:suffix...]，并放宽到第 3 段之后任一段命中 groupId
+    for (let i = 2; i < parts.length; i += 1) {
+      if (groupIds.has(parts[i])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // 兼容 <agentId>:<groupId>[:suffix...]（Gateway 可能返回无 "agent:" 前缀的 key）
+  for (let i = 1; i < parts.length; i += 1) {
     if (groupIds.has(parts[i])) {
       return true;
     }
@@ -247,7 +259,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const localGroupSessions = loadStoredGroupSessions();
       const knownGroupIds = new Set<string>(
         localGroupSessions
-          .map((session) => session.groupId?.trim())
+          .map((session) => session.groupId?.trim().toLowerCase())
           .filter((id): id is string => Boolean(id))
       );
       const knownGroupMemberSessionKeys = new Set<string>();
@@ -262,7 +274,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           for (const group of groups) {
             const groupId = group.id?.trim();
             if (groupId) {
-              knownGroupIds.add(groupId);
+              knownGroupIds.add(groupId.toLowerCase());
             }
           }
 
@@ -285,11 +297,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
                   if (!agentId) continue;
 
                   const explicitSessionKey = member.sessionKey?.trim();
-                  const canonicalSessionKey = `agent:${agentId}:${groupId}`;
+                  const canonicalSessionKey = `agent:${agentId}:${groupId}`.toLowerCase();
+                  const compactSessionKey = `${agentId}:${groupId}`.toLowerCase();
                   if (explicitSessionKey) {
-                    knownGroupMemberSessionKeys.add(explicitSessionKey);
+                    knownGroupMemberSessionKeys.add(explicitSessionKey.toLowerCase());
                   }
                   knownGroupMemberSessionKeys.add(canonicalSessionKey);
+                  knownGroupMemberSessionKeys.add(compactSessionKey);
                 }
               })
           );
