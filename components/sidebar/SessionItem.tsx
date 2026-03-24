@@ -111,7 +111,11 @@ export function SessionItem({
 
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium truncate">
-            {session.id.startsWith("temp-") ? session.title : extractSessionDisplayName(session.id)}
+            {session.type === "group"
+              ? session.title
+              : session.id.startsWith("temp-")
+                ? session.title
+                : extractSessionDisplayName(session.id)}
           </div>
           <div className="text-xs text-muted-foreground flex items-center gap-1.5">
             <span>{relativeTime}</span>

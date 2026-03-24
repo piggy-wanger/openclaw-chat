@@ -180,7 +180,10 @@ function persistGroupSessions(sessions: Session[]): void {
 }
 
 // 将 SessionEntry 转换为 Session
-function sessionEntryToSession(entry: SessionEntry): Session {
+function sessionEntryToSession(
+  entry: SessionEntry,
+  groupNameById?: ReadonlyMap<string, string>
+): Session {
   // 解析 origin 字段
   // origin 可能是字符串（如 "direct"）或对象（群组场景）
   let type: Session["type"] = "direct";
@@ -203,6 +206,13 @@ function sessionEntryToSession(entry: SessionEntry): Session {
       } else if (originObj.name && typeof originObj.name === "string") {
         title = entry.title || originObj.name;
       }
+    }
+  }
+
+  if (type === "group" && groupId) {
+    const mappedGroupName = groupNameById?.get(groupId);
+    if (mappedGroupName?.trim()) {
+      title = mappedGroupName;
     }
   }
 
@@ -263,18 +273,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           .filter((id): id is string => Boolean(id))
       );
       const knownGroupMemberSessionKeys = new Set<string>();
+      const groupNameById = new Map<string, string>();
 
       try {
         const groupsRes = await fetch("/api/groups", { cache: "no-store" });
         if (groupsRes.ok) {
           const groupsData = (await groupsRes.json()) as {
-            groups?: Array<{ id?: string }>;
+            groups?: Array<{ id?: string; name?: string }>;
           };
           const groups = Array.isArray(groupsData.groups) ? groupsData.groups : [];
           for (const group of groups) {
             const groupId = group.id?.trim();
             if (groupId) {
               knownGroupIds.add(groupId.toLowerCase());
+              if (group.name?.trim()) {
+                groupNameById.set(groupId, group.name.trim());
+              }
             }
           }
 
@@ -327,23 +341,38 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const sessionList = entries
         .filter(e => e.origin != null)
         .filter((entry) => !isGroupMemberSessionKey(entry.key, knownGroupIds, knownGroupMemberSessionKeys))
-        .map(sessionEntryToSession)
+        .map((entry) => sessionEntryToSession(entry, groupNameById))
         .sort((a, b) => b.updatedAt - a.updatedAt);
       const mergedMap = new Map<string, Session>(sessionList.map((session) => [session.id, session]));
+      const mergedByGroupId = new Map<string, Session>();
+      for (const session of sessionList) {
+        const gid = session.groupId?.trim();
+        if (session.type === "group" && gid) {
+          mergedByGroupId.set(gid, session);
+        }
+      }
 
       for (const localSession of localGroupSessions) {
         const existing = mergedMap.get(localSession.id);
-        if (!existing) {
+        const existingByGroupId =
+          existing ||
+          (localSession.groupId?.trim() ? mergedByGroupId.get(localSession.groupId.trim()) : undefined);
+
+        if (!existingByGroupId) {
           mergedMap.set(localSession.id, localSession);
           continue;
         }
 
+        if (existingByGroupId.id !== localSession.id) {
+          mergedMap.delete(existingByGroupId.id);
+        }
+
         mergedMap.set(localSession.id, {
-          ...existing,
+          ...existingByGroupId,
           ...localSession,
           type: "group",
-          groupId: localSession.groupId ?? existing.groupId,
-          title: localSession.title || existing.title,
+          groupId: localSession.groupId ?? existingByGroupId.groupId,
+          title: localSession.title || existingByGroupId.title,
         });
       }
 
