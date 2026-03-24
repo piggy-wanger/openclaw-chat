@@ -222,6 +222,7 @@ function ChatArea({
   };
 
   const handleCreateSessionWithOptions = async (options: {
+    sessionId: string;
     sessionName: string;
     agentId: string;
     model: string;
@@ -469,6 +470,7 @@ function GroupChatArea({
   };
 
   const handleCreateSessionWithOptions = async (options: {
+    sessionId: string;
     sessionName: string;
     agentId: string;
     model: string;

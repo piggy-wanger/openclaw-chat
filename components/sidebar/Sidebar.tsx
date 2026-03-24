@@ -24,6 +24,7 @@ interface SidebarProps {
   onRenameSession: (id: string, title: string) => void;
   onDeleteSession: (id: string) => void;
   onCreateSessionWithOptions: (options: {
+    sessionId: string;
     sessionName: string;
     agentId: string;
     model: string;
@@ -65,7 +66,7 @@ export const Sidebar = forwardRef<SidebarRef, SidebarProps>(
 
     // Handle new session creation from dialog
     const handleCreateSessionWithOptions = useCallback(
-      (options: { sessionName: string; agentId: string; model: string }) => {
+      (options: { sessionId: string; sessionName: string; agentId: string; model: string }) => {
         onCreateSessionWithOptions(options);
         setShowNewSessionDialog(false);
       },

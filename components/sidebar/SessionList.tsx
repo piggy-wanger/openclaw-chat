@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { SessionItem } from "./SessionItem";
 import type { GroupMember, Session } from "@/lib/types";
+import { extractSessionDisplayName } from "@/hooks/useSession";
 
 interface SessionListProps {
   sessions: Session[];
@@ -41,7 +42,9 @@ export const SessionList = forwardRef<HTMLInputElement, SessionListProps>(
       );
 
       if (groupIds.length === 0) {
-        setGroupMembersMap({});
+        queueMicrotask(() => {
+          setGroupMembersMap((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+        });
         return;
       }
 
@@ -82,9 +85,16 @@ export const SessionList = forwardRef<HTMLInputElement, SessionListProps>(
         return sessions;
       }
       const query = searchQuery.toLowerCase();
-      return sessions.filter((s) =>
-        s.title.toLowerCase().includes(query)
-      );
+      return sessions.filter((s) => {
+        if (s.type === "group") {
+          return s.title.toLowerCase().includes(query);
+        }
+        const mainTitle = s.displayName?.trim() || extractSessionDisplayName(s.id);
+        return (
+          mainTitle.toLowerCase().includes(query) ||
+          s.id.toLowerCase().includes(query)
+        );
+      });
     }, [sessions, searchQuery]);
 
     // 分组过滤后的会话

@@ -43,6 +43,7 @@ type NewSessionDialogProps = {
   client: GatewayClient | null;
   isConnected: boolean;
   onCreateSession: (options: {
+    sessionId: string;
     sessionName: string;
     agentId: string;
     model: string;
@@ -56,6 +57,7 @@ export function NewSessionDialog({
   isConnected,
   onCreateSession,
 }: NewSessionDialogProps) {
+  const [sessionId, setSessionId] = useState("");
   const [sessionName, setSessionName] = useState("");
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
@@ -164,27 +166,30 @@ export function NewSessionDialog({
 
   // Handle form submission
   const handleSubmit = () => {
-    if (!sessionName.trim() || !selectedAgentId || !selectedModel) {
+    if (!sessionId.trim() || !selectedAgentId || !selectedModel) {
       return;
     }
 
     onCreateSession({
+      sessionId: sessionId.trim(),
       sessionName: sessionName.trim(),
       agentId: selectedAgentId,
       model: selectedModel,
     });
 
     // Reset form
+    setSessionId("");
     setSessionName("");
     onOpenChange(false);
   };
 
   // Check if form is valid for submission
-  const isFormValid = sessionName.trim() && selectedAgentId && selectedModel;
+  const isFormValid = sessionId.trim() && selectedAgentId && selectedModel;
 
   // Handle dialog close
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
+      setSessionId("");
       setSessionName("");
     }
     onOpenChange(newOpen);
@@ -201,15 +206,33 @@ export function NewSessionDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {/* Session ID */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">
+              会话ID <span className="text-destructive">*</span>
+            </label>
+            <Input
+              value={sessionId}
+              onChange={(e) => setSessionId(e.target.value)}
+              placeholder="输入会话ID（如 xxx）..."
+              className="bg-muted border-border text-foreground"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && isFormValid) {
+                  handleSubmit();
+                }
+              }}
+            />
+          </div>
+
           {/* Session Name */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">
-              会话名称 <span className="text-destructive">*</span>
+              会话名称 <span className="text-muted-foreground font-normal">(可选)</span>
             </label>
             <Input
               value={sessionName}
               onChange={(e) => setSessionName(e.target.value)}
-              placeholder="输入会话名称..."
+              placeholder="输入会话名称（不填则显示会话ID）..."
               className="bg-muted border-border text-foreground"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && isFormValid) {

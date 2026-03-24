@@ -3,6 +3,7 @@
 export type Session = {
   id: string;
   title: string;
+  displayName?: string;
   type: "direct" | "group";
   groupId?: string;
   model: string;

@@ -25,7 +25,8 @@ type SessionContextType = {
   fetchSessions: () => Promise<void>;
   createSession: () => Promise<Session | null>;
   createSessionWithOptions: (options: {
-    sessionName: string;
+    sessionId: string;
+    sessionName?: string;
     agentId: string;
     model: string;
   }) => Promise<Session | null>;
@@ -192,7 +193,8 @@ function sessionEntryToSession(
   // 解析 origin 字段
   // origin 可能是字符串（如 "direct"）或对象（群组场景）
   let type: Session["type"] = "direct";
-  let title = entry.title || extractSessionDisplayName(entry.key);
+  let displayName = entry.title?.trim() || undefined;
+  let title = displayName || extractSessionDisplayName(entry.key);
   let groupId: string | undefined;
 
   if (typeof entry.origin === "string") {
@@ -211,6 +213,7 @@ function sessionEntryToSession(
       } else if (originObj.name && typeof originObj.name === "string") {
         title = entry.title || originObj.name;
       }
+      displayName = undefined;
     }
   }
 
@@ -224,6 +227,7 @@ function sessionEntryToSession(
   return {
     id: entry.key,
     title,
+    displayName,
     type,
     groupId,
     model: entry.model || "unknown",
@@ -399,6 +403,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const tempSession: Session = {
       id: `temp-${Date.now()}-${nanoid(6)}`,
       title: "New Chat",
+      displayName: "New Chat",
       type: "direct",
       model: "unknown",
       createdAt: Date.now(),
@@ -415,20 +420,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // 创建带有自定义选项的新会话
   const createSessionWithOptions = useCallback(
     async (options: {
-      sessionName: string;
+      sessionId: string;
+      sessionName?: string;
       agentId: string;
       model: string;
     }) => {
-      const { sessionName, agentId, model } = options;
+      const normalizedSessionId = options.sessionId.trim();
+      const normalizedSessionName = options.sessionName?.trim() || undefined;
+      const { agentId, model } = options;
 
-      // 构建唯一的 session ID: agent:<agentId>:<sessionName>:<nanoid>
-      // sessionKey for Gateway is agent:<agentId>:<sessionName>, but local ID is unique
-      const uniqueId = `agent:${agentId}:${sessionName}:${nanoid(6)}`;
+      // 构建 sessionKey: <agentId>:<sessionId>
+      const sessionKey = `${agentId}:${normalizedSessionId}`;
 
-      // 创建一个临时 session（真实的 sessionKey 在首条消息发送后生效）
       const tempSession: Session = {
-        id: uniqueId,
-        title: sessionName,
+        id: sessionKey,
+        title: normalizedSessionName || normalizedSessionId,
+        displayName: normalizedSessionName,
         type: "direct",
         model: model,
         createdAt: Date.now(),
@@ -436,7 +443,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       };
 
       // 添加到列表并设为当前会话
-      setSessions((prev) => [tempSession, ...prev]);
+      setSessions((prev) => [tempSession, ...prev.filter((s) => s.id !== sessionKey)]);
       setCurrentSessionId(tempSession.id);
 
       return tempSession;
@@ -581,6 +588,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
               ? {
                   ...s,
                   ...updates,
+                  ...(s.type === "direct" && updates.title !== undefined
+                    ? {
+                        displayName: updates.title.trim() || undefined,
+                        title: updates.title.trim() || extractSessionDisplayName(s.id),
+                      }
+                    : {}),
                   updatedAt: Date.now(),
                 }
               : s

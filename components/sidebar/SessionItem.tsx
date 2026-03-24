@@ -45,7 +45,9 @@ export function SessionItem({
 }: SessionItemProps) {
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [newTitle, setNewTitle] = useState(session.title);
+  const [newTitle, setNewTitle] = useState(
+    session.type === "direct" ? (session.displayName ?? "") : session.title
+  );
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const relativeTime = formatDistanceToNow(session.updatedAt, {
@@ -54,8 +56,13 @@ export function SessionItem({
   });
 
   const handleRename = () => {
-    if (newTitle.trim() && newTitle !== session.title) {
-      onRename(newTitle.trim());
+    const normalizedTitle = newTitle.trim();
+    const previousTitle = session.type === "direct" ? (session.displayName?.trim() || "") : session.title;
+    if (session.type === "group" && !normalizedTitle) {
+      return;
+    }
+    if (normalizedTitle !== previousTitle) {
+      onRename(normalizedTitle);
     }
     setShowRenameDialog(false);
     setDropdownOpen(false);
@@ -68,9 +75,11 @@ export function SessionItem({
   };
 
   const handleOpenRename = () => {
-    setNewTitle(session.title);
+    setNewTitle(session.type === "direct" ? (session.displayName ?? "") : session.title);
     setShowRenameDialog(true);
   };
+
+  const directMainTitle = session.displayName?.trim() || extractSessionDisplayName(session.id);
 
   return (
     <>
@@ -113,18 +122,18 @@ export function SessionItem({
           <div className="text-sm font-medium truncate">
             {session.type === "group"
               ? session.title
-              : session.id.startsWith("temp-")
-                ? session.title
-                : extractSessionDisplayName(session.id)}
+              : directMainTitle}
           </div>
-          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-            <span>{relativeTime}</span>
-            {session.type === "group" && (
+          {session.type === "group" ? (
+            <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <span>{relativeTime}</span>
               <Badge variant="outline" className="h-4 px-1.5 text-[10px] leading-none">
                 {groupMembers.length}
               </Badge>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="text-muted-foreground text-xs truncate">{session.id}</div>
+          )}
         </div>
         <div
           className={cn(
@@ -157,13 +166,13 @@ export function SessionItem({
       <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>重命名会话</DialogTitle>
+            <DialogTitle>编辑会话名称</DialogTitle>
           </DialogHeader>
           <div className="py-4">
             <Input
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="输入新标题"
+              placeholder={session.type === "direct" ? "输入会话名称（可留空）" : "输入新标题"}
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleRename();
               }}
