@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, asc, count, eq, like, lt } from "drizzle-orm";
+import { and, asc, count, desc, eq, like, lt } from "drizzle-orm";
 import { db, groupMessages, groups } from "@/db";
 import type { ErrorResponse } from "@/lib/types";
 
@@ -102,6 +102,16 @@ export async function GET(
     }
     const maxChars = Math.max(parsedMaxChars, 0);
 
+    const limitRaw = searchParams.get("limit");
+    const parsedLimit = limitRaw ? Number.parseInt(limitRaw, 10) : null;
+    if (limitRaw && (parsedLimit === null || Number.isNaN(parsedLimit) || parsedLimit < 0)) {
+      return NextResponse.json(
+        { error: "limit must be a non-negative integer", status: 400 },
+        { status: 400 }
+      );
+    }
+    const limit = parsedLimit;
+
     const filters = [eq(groupMessages.groupId, groupId)];
     if (senderId) {
       filters.push(eq(groupMessages.senderId, senderId));
@@ -125,7 +135,7 @@ export async function GET(
 
     const filteredMessages = filteredRow?.total ?? 0;
 
-    const rows = await db
+    const baseSelect = db
       .select({
         senderType: groupMessages.senderType,
         senderId: groupMessages.senderId,
@@ -135,8 +145,16 @@ export async function GET(
         createdAt: groupMessages.createdAt,
       })
       .from(groupMessages)
-      .where(and(...filters))
-      .orderBy(asc(groupMessages.createdAt), asc(groupMessages.id));
+      .where(and(...filters));
+
+    const rows =
+      limit === null
+        ? await baseSelect.orderBy(asc(groupMessages.createdAt), asc(groupMessages.id))
+        : (
+            await baseSelect
+              .orderBy(desc(groupMessages.createdAt), desc(groupMessages.id))
+              .limit(limit)
+          ).reverse();
 
     let charCount = 0;
     let keepFromIndex = rows.length;
@@ -179,9 +197,11 @@ export async function GET(
       });
     }
 
+    const queryTime = formatCNTime(Date.now());
     const textBody = [
       `=== 群组「${group.name}」消息记录 ===`,
-      `共 ${filteredMessages} 条消息`,
+      `共 ${filteredMessages} 条消息 | 查询时间：${queryTime}`,
+      truncated ? "truncated: true" : "truncated: false",
       "",
       ...messages.flatMap((message) => [
         `--- ${message.senderEmoji} ${message.sender}(${message.senderId}) [${message.time}] ---`,
