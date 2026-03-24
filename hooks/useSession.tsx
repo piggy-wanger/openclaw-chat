@@ -93,8 +93,9 @@ function isGroupSession(session: Session): boolean {
 function isGroupMemberSessionKey(sessionKey: string, groupIds: Set<string>): boolean {
   if (!sessionKey || groupIds.size === 0) return false;
   const parts = sessionKey.split(":");
-  if (parts.length !== 3) return false;
+  if (parts.length < 3) return false;
   if (parts[0] !== "agent") return false;
+  // 兼容 agent:<agentId>:<groupId>[:suffix...]，只要第 3 段命中 groupId 即视为群组成员会话
   const groupId = parts[2]?.trim();
   return Boolean(groupId && groupIds.has(groupId));
 }
