@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { SessionItem } from "./SessionItem";
 import type { GroupMember, Session } from "@/lib/types";
-import { extractSessionDisplayName } from "@/hooks/useSession";
+import { extractSessionDisplayName, formatReadableSessionKey } from "@/hooks/useSession";
 
 interface SessionListProps {
   sessions: Session[];
@@ -90,8 +90,10 @@ export const SessionList = forwardRef<HTMLInputElement, SessionListProps>(
           return s.title.toLowerCase().includes(query);
         }
         const mainTitle = s.displayName?.trim() || extractSessionDisplayName(s.id);
+        const readableSessionKey = formatReadableSessionKey(s.id);
         return (
           mainTitle.toLowerCase().includes(query) ||
+          readableSessionKey.toLowerCase().includes(query) ||
           s.id.toLowerCase().includes(query)
         );
       });

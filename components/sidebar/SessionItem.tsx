@@ -24,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { GroupMember, Session } from "@/lib/types";
-import { extractSessionDisplayName } from "@/hooks/useSession";
+import { extractSessionDisplayName, formatReadableSessionKey } from "@/hooks/useSession";
 
 interface SessionItemProps {
   session: Session;
@@ -132,7 +132,7 @@ export function SessionItem({
               </Badge>
             </div>
           ) : (
-            <div className="text-muted-foreground text-xs truncate">{session.id}</div>
+            <div className="text-muted-foreground text-xs truncate">{formatReadableSessionKey(session.id)}</div>
           )}
         </div>
         <div

@@ -193,8 +193,14 @@ function sessionEntryToSession(
   // 解析 origin 字段
   // origin 可能是字符串（如 "direct"）或对象（群组场景）
   let type: Session["type"] = "direct";
-  let displayName = entry.title?.trim() || undefined;
-  let title = displayName || extractSessionDisplayName(entry.key);
+  const keyInfo = parseSessionKey(entry.key);
+  const entryTitle = entry.title?.trim();
+  const hasCustomDisplayName =
+    Boolean(entryTitle) &&
+    entryTitle !== keyInfo.sessionName &&
+    entryTitle !== keyInfo.readableKey;
+  let displayName = hasCustomDisplayName ? entryTitle : undefined;
+  let title = displayName || keyInfo.sessionName || keyInfo.readableKey;
   let groupId: string | undefined;
 
   if (typeof entry.origin === "string") {
@@ -236,20 +242,50 @@ function sessionEntryToSession(
   };
 }
 
-// 从 sessionKey 中提取显示名称（最后一段）
-export function extractSessionDisplayName(sessionKey: string): string {
+function parseSessionKey(sessionKey: string): {
+  sessionName: string;
+  readableKey: string;
+} {
   const parts = sessionKey.split(":");
-  // agent:<agentId>:<sessionName>[:<nanoid>] → agentId:sessionName
   if (parts.length > 2 && parts[0] === "agent") {
-    // 去掉 "agent" 前缀和可能的 nanoid 后缀
-    let nameParts = parts.slice(1);
-    const last = nameParts[nameParts.length - 1];
+    const agentId = parts[1] || "unknown";
+    let nameParts = parts.slice(2);
+    const last = nameParts[nameParts.length - 1] || "";
     if (/^[a-z0-9]{6,8}$/.test(last)) {
       nameParts = nameParts.slice(0, -1);
     }
-    return nameParts.join(":") || sessionKey;
+    const sessionName = nameParts.join(":") || sessionKey;
+    return {
+      sessionName,
+      readableKey: `${agentId}:${sessionName}`,
+    };
   }
-  return parts.length > 1 ? parts[parts.length - 1] : sessionKey;
+
+  let normalizedParts = [...parts];
+  const last = normalizedParts[normalizedParts.length - 1] || "";
+  if (normalizedParts.length > 2 && /^[a-z0-9]{6,8}$/.test(last)) {
+    normalizedParts = normalizedParts.slice(0, -1);
+  }
+
+  const sessionName =
+    normalizedParts.length > 1
+      ? normalizedParts[normalizedParts.length - 1]
+      : sessionKey;
+  return {
+    sessionName,
+    readableKey:
+      normalizedParts.length > 1 ? normalizedParts.join(":") : sessionName,
+  };
+}
+
+// 从 sessionKey 中提取主标题候选（sessionName）
+export function extractSessionDisplayName(sessionKey: string): string {
+  return parseSessionKey(sessionKey).sessionName;
+}
+
+// 将 sessionKey 转换为可读格式（agentId:sessionName）
+export function formatReadableSessionKey(sessionKey: string): string {
+  return parseSessionKey(sessionKey).readableKey;
 }
 
 // Provider
