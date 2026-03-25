@@ -14,6 +14,18 @@ export const sessions = sqliteTable("sessions", {
   updatedAt: integer("updated_at").notNull().$defaultFn(() => Date.now()),
 });
 
+// Agents table
+export const agents = sqliteTable("agents", {
+  id: text("id").primaryKey(), // agentId: main, coder 等
+  name: text("name"), // 显示名称
+  model: text("model"), // 底层模型标识
+  emoji: text("emoji"),
+  avatar: text("avatar"), // 头像路径
+  workspace: text("workspace"), // 工作目录路径
+  createdAt: integer("created_at").notNull().$defaultFn(() => Date.now()),
+  updatedAt: integer("updated_at").notNull().$defaultFn(() => Date.now()),
+});
+
 // Groups table
 export const groups = sqliteTable("groups", {
   id: text("id").primaryKey().$defaultFn(() => nanoid()),
@@ -87,6 +99,7 @@ export const groupMessagesRelations = relations(groupMessages, ({ one }) => ({
 // Export schema object
 export const schema = {
   sessions,
+  agents,
   groups,
   groupMembers,
   groupMessages,
