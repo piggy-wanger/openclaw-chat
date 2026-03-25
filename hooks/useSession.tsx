@@ -718,7 +718,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         // 调用 Gateway sessions.patch
         await client.sessionsPatch({
           key: id,
-          title: updates.title,
           model: updates.model,
         });
 
