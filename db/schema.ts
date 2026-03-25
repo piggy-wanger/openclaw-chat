@@ -2,6 +2,16 @@ import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core
 import { relations } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
+// Sessions table
+export const sessions = sqliteTable("sessions", {
+  id: text("id").primaryKey(), // 完整 sessionKey: agent:<agentId>:<sessionName>:<nanoid(6)>
+  displayName: text("display_name"), // 会话名称（新建会话表单）+ 侧边栏主标题
+  readableKey: text("readable_key"), // agentId:sessionName
+  type: text("type").notNull().$type<"direct" | "group">().default("direct"),
+  createdAt: integer("created_at").notNull().$defaultFn(() => Date.now()),
+  updatedAt: integer("updated_at").notNull().$defaultFn(() => Date.now()),
+});
+
 // Groups table
 export const groups = sqliteTable("groups", {
   id: text("id").primaryKey().$defaultFn(() => nanoid()),
@@ -74,6 +84,7 @@ export const groupMessagesRelations = relations(groupMessages, ({ one }) => ({
 
 // Export schema object
 export const schema = {
+  sessions,
   groups,
   groupMembers,
   groupMessages,
