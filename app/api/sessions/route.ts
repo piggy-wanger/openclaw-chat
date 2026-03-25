@@ -12,6 +12,7 @@ type SessionRow = {
   sessionName: string | null;
   agentId: string | null;
   type: "direct" | "group";
+  model: string | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -73,6 +74,7 @@ export async function POST(
         sessionName: normalizedSessionName,
         agentId: body.agentId?.trim() || null,
         type: body.type,
+        model: body.model?.trim() || null,
         createdAt: now,
         updatedAt: now,
       })
@@ -84,6 +86,7 @@ export async function POST(
           sessionName: normalizedSessionName,
           agentId: body.agentId?.trim() || null,
           type: body.type,
+          model: body.model?.trim() || null,
           updatedAt: now,
         },
       });

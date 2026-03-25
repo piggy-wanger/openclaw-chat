@@ -11,6 +11,7 @@ type SyncSessionInput = {
   sessionName?: string;
   agentId?: string;
   type: "direct" | "group";
+  model?: string;
   createdAt?: number;
   updatedAt?: number;
 };
@@ -47,6 +48,7 @@ export async function POST(
                   sessionName,
                   agentId: item.agentId?.trim() || null,
                   type: item.type || "direct",
+                  model: item.model?.trim() || null,
                   createdAt:
                     typeof item.createdAt === "number" && Number.isFinite(item.createdAt)
                       ? item.createdAt

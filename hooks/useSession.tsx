@@ -287,6 +287,7 @@ type SqliteSessionRow = {
   sessionName: string | null;
   agentId: string | null;
   type: "direct" | "group";
+  model: string | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -298,6 +299,7 @@ type SessionSyncPayload = {
   sessionName: string;
   agentId?: string;
   type: "direct" | "group";
+  model?: string;
   createdAt: number;
   updatedAt: number;
 };
@@ -314,7 +316,7 @@ function sqliteSessionRowToSession(row: SqliteSessionRow): Session {
     displayName: row.type === "direct" ? normalizedDisplayName || undefined : undefined,
     type: row.type,
     groupId: row.type === "group" ? normalizedSessionName || undefined : undefined,
-    model: "unknown",
+    model: row.model || "unknown",
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -449,6 +451,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           sessionName,
           agentId: keyInfo.agentId,
           type: session.type,
+          model: session.model || null,
           createdAt: session.createdAt,
           updatedAt: session.updatedAt,
         };
