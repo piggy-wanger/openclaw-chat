@@ -8,7 +8,7 @@ export const sessions = sqliteTable("sessions", {
   displayName: text("display_name"), // 会话名称（新建会话表单）+ 侧边栏主标题
   readableKey: text("readable_key"), // agentId:sessionName
   sessionName: text("session_name"), // 新建表单的会话ID
-  agentId: text("agent_id"), // 新建表单的智能体ID
+  agentId: text("agent_id").references(() => agents.id), // 新建表单的智能体ID
   type: text("type").notNull().$type<"direct" | "group">().default("direct"),
   createdAt: integer("created_at").notNull().$defaultFn(() => Date.now()),
   updatedAt: integer("updated_at").notNull().$defaultFn(() => Date.now()),
