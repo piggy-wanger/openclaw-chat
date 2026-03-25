@@ -28,6 +28,7 @@ type GroupChatContextType = {
   membersOnline: Map<string, boolean>;
   messages: GroupMessage[];
   loading: boolean;
+  isSessionSwitching: boolean;
   hasMoreMessages: boolean;
   isLoadingMore: boolean;
   streamingMap: Map<string, StreamingState>;
@@ -180,6 +181,7 @@ export function GroupChatProvider({
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isSessionSwitching, setIsSessionSwitching] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [streamingMap, setStreamingMap] = useState<Map<string, StreamingState>>(new Map());
@@ -200,6 +202,7 @@ export function GroupChatProvider({
   const completedRunsRef = useRef<Set<string>>(new Set());
   const groupFetchEpochRef = useRef(0);
   const groupFetchAbortRef = useRef<AbortController | null>(null);
+  const hasLoadedOnceRef = useRef(false);
 
   const setStreamingMapState = useCallback(
     (updater: Map<string, StreamingState> | ((prev: Map<string, StreamingState>) => Map<string, StreamingState>)) => {
@@ -252,6 +255,9 @@ export function GroupChatProvider({
     } finally {
       if (loadMore) {
         setIsLoadingMore(false);
+      } else {
+        hasLoadedOnceRef.current = true;
+        setIsSessionSwitching(false);
       }
     }
   }, [groupId, isLoadingMore]);
@@ -268,25 +274,24 @@ export function GroupChatProvider({
       setMessages([]);
       setHasMoreMessages(false);
       setIsLoadingMore(false);
+      setIsSessionSwitching(false);
       setLoading(false);
       return;
     }
 
     setLoading(true);
     try {
-      const [groupRes, membersRes, messagesRes] = await Promise.all([
+      const [groupRes, membersRes] = await Promise.all([
         fetch(`/api/groups/${groupId}`, { cache: "no-store", signal: abortController.signal }),
         fetch(`/api/groups/${groupId}/members`, { cache: "no-store", signal: abortController.signal }),
-        fetch(`/api/groups/${groupId}/messages`, { cache: "no-store", signal: abortController.signal }),
       ]);
 
-      if (!groupRes.ok || !membersRes.ok || !messagesRes.ok) {
+      if (!groupRes.ok || !membersRes.ok) {
         throw new Error("Failed to initialize group chat data");
       }
 
       const groupData = (await groupRes.json()) as GroupDetailResponse;
       const membersData = (await membersRes.json()) as GroupMembersResponse;
-      const messagesData = (await messagesRes.json()) as GroupMessagesResponse;
 
       if (currentEpoch !== groupFetchEpochRef.current) return;
 
@@ -294,8 +299,7 @@ export function GroupChatProvider({
       const memberList = Array.isArray(membersData.members) ? membersData.members : [];
       setMembers(memberList);
       membersRef.current = memberList;
-      setMessages(Array.isArray(messagesData.messages) ? messagesData.messages : []);
-      setHasMoreMessages(Boolean(messagesData.pagination?.hasMore));
+      await fetchMessages();
     } catch (err) {
       if (currentEpoch !== groupFetchEpochRef.current) return;
       if (err instanceof DOMException && err.name === "AbortError") return;
@@ -766,6 +770,17 @@ export function GroupChatProvider({
     };
   }, [groupId, abortStream, fetchGroupData, setStreamingMapState]);
 
+  useEffect(() => {
+    if (!groupId) {
+      setIsSessionSwitching(false);
+      return;
+    }
+
+    if (hasLoadedOnceRef.current) {
+      setIsSessionSwitching(true);
+    }
+  }, [groupId]);
+
   const value = useMemo<GroupChatContextType>(
     () => ({
       group,
@@ -773,6 +788,7 @@ export function GroupChatProvider({
       membersOnline,
       messages,
       loading,
+      isSessionSwitching,
       hasMoreMessages,
       isLoadingMore,
       streamingMap,
@@ -788,6 +804,7 @@ export function GroupChatProvider({
       group,
       hasMoreMessages,
       isLoadingMore,
+      isSessionSwitching,
       loading,
       members,
       membersOnline,

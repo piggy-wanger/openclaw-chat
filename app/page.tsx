@@ -424,6 +424,7 @@ function GroupChatArea({
     group,
     messages,
     loading: messageLoading,
+    isSessionSwitching,
     sendMessage,
     abortStream,
     members,
@@ -619,6 +620,17 @@ function GroupChatArea({
                 isGroup
                 groupAgents={groupAgents}
               />
+
+              {isSessionSwitching && (
+                <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    </div>
+                    <span className="text-xs text-muted-foreground">切换会话...</span>
+                  </div>
+                </div>
+              )}
             </>
           ) : sessionLoading ? (
             <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
