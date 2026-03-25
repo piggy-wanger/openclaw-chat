@@ -245,19 +245,21 @@ function sessionEntryToSession(
 function parseSessionKey(sessionKey: string): {
   sessionName: string;
   readableKey: string;
+  agentId?: string;
 } {
   const parts = sessionKey.split(":");
   if (parts.length > 2 && parts[0] === "agent") {
     const agentId = parts[1] || "unknown";
     let nameParts = parts.slice(2);
     const last = nameParts[nameParts.length - 1] || "";
-    if (/^[a-z0-9]{6,8}$/.test(last)) {
+    if (/^[a-z0-9]{6}$/.test(last)) {
       nameParts = nameParts.slice(0, -1);
     }
     const sessionName = nameParts.join(":") || sessionKey;
     return {
       sessionName,
       readableKey: `${agentId}:${sessionName}`,
+      agentId,
     };
   }
 
@@ -275,6 +277,46 @@ function parseSessionKey(sessionKey: string): {
     sessionName,
     readableKey:
       normalizedParts.length > 1 ? normalizedParts.join(":") : sessionName,
+  };
+}
+
+type SqliteSessionRow = {
+  id: string;
+  displayName: string | null;
+  readableKey: string | null;
+  sessionName: string | null;
+  agentId: string | null;
+  type: "direct" | "group";
+  createdAt: number;
+  updatedAt: number;
+};
+
+type SessionSyncPayload = {
+  id: string;
+  displayName: string;
+  readableKey: string;
+  sessionName: string;
+  agentId?: string;
+  type: "direct" | "group";
+  createdAt: number;
+  updatedAt: number;
+};
+
+function sqliteSessionRowToSession(row: SqliteSessionRow): Session {
+  const keyInfo = parseSessionKey(row.id);
+  const normalizedDisplayName = row.displayName?.trim() || "";
+  const normalizedSessionName = row.sessionName?.trim() || keyInfo.sessionName || row.id;
+  const title = normalizedDisplayName || normalizedSessionName || keyInfo.readableKey || row.id;
+
+  return {
+    id: row.id,
+    title,
+    displayName: row.type === "direct" ? normalizedDisplayName || undefined : undefined,
+    type: row.type,
+    groupId: row.type === "group" ? normalizedSessionName || undefined : undefined,
+    model: "unknown",
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -383,14 +425,56 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       });
 
       // 转换为 Session 类型并按 updatedAt 降序排列
-      const sessionList = entries
+      const gatewaySessions = entries
         .filter(e => e.origin != null)
         .filter((entry) => !isGroupMemberSessionKey(entry.key, knownGroupIds, knownGroupMemberSessionKeys))
         .map((entry) => sessionEntryToSession(entry, groupNameById))
         .sort((a, b) => b.updatedAt - a.updatedAt);
-      const mergedMap = new Map<string, Session>(sessionList.map((session) => [session.id, session]));
+
+      const payload: SessionSyncPayload[] = gatewaySessions.map((session) => {
+        const keyInfo = parseSessionKey(session.id);
+        const sessionName =
+          session.type === "group"
+            ? session.groupId?.trim() || keyInfo.sessionName
+            : keyInfo.sessionName;
+        const displayName =
+          session.type === "group"
+            ? session.title?.trim() || sessionName
+            : session.displayName?.trim() || session.title?.trim() || sessionName;
+
+        return {
+          id: session.id,
+          displayName,
+          readableKey: keyInfo.readableKey,
+          sessionName,
+          agentId: keyInfo.agentId,
+          type: session.type,
+          createdAt: session.createdAt,
+          updatedAt: session.updatedAt,
+        };
+      });
+
+      const syncRes = await fetch("/api/sessions/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessions: payload }),
+      });
+      if (!syncRes.ok) {
+        throw new Error(`Failed to sync sessions: ${syncRes.status}`);
+      }
+
+      const sqliteRes = await fetch("/api/sessions", { cache: "no-store" });
+      if (!sqliteRes.ok) {
+        throw new Error(`Failed to read sessions from SQLite: ${sqliteRes.status}`);
+      }
+      const sqliteData = (await sqliteRes.json()) as { sessions?: SqliteSessionRow[] };
+      const sqliteSessions = (Array.isArray(sqliteData.sessions) ? sqliteData.sessions : [])
+        .map(sqliteSessionRowToSession)
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+
+      const mergedMap = new Map<string, Session>(sqliteSessions.map((session) => [session.id, session]));
       const mergedByGroupId = new Map<string, Session>();
-      for (const session of sessionList) {
+      for (const session of sqliteSessions) {
         const gid = session.groupId?.trim();
         if (session.type === "group" && gid) {
           mergedByGroupId.set(gid, session);
@@ -588,6 +672,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           updatedAt: Date.now(),
         };
 
+        const createSessionRes = await fetch("/api/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: groupSession.id,
+            displayName: groupName,
+            readableKey: formatReadableSessionKey(groupSession.id),
+            sessionName: groupId,
+            agentId: primaryAgentId,
+            type: "group",
+            model: groupSession.model,
+          }),
+        });
+        if (!createSessionRes.ok) {
+          throw new Error(`Failed to write group session into SQLite: ${createSessionRes.status}`);
+        }
+
         // 添加到列表并设为当前会话
         setSessions((prev) => [groupSession, ...prev]);
         setCurrentSessionId(groupSession.id);
@@ -617,6 +718,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           title: updates.title,
           model: updates.model,
         });
+
+        const sqliteRes = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            displayName: updates.title,
+            title: updates.title,
+            model: updates.model,
+          }),
+        });
+        if (!sqliteRes.ok) {
+          throw new Error(`Failed to update session in SQLite: ${sqliteRes.status}`);
+        }
 
         // 更新本地状态
         setSessions((prev) =>
@@ -662,6 +776,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setError(null);
       try {
         const targetSession = sessions.find((session) => session.id === id);
+        const sqliteDeleteKeys = new Set<string>([id]);
 
         if (targetSession?.type === "group" && targetSession.groupId) {
           try {
@@ -680,6 +795,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
               } else if (member.agentId?.trim()) {
                 sessionKeys.add(`agent:${member.agentId.trim()}:${targetSession.groupId}`);
               }
+            }
+            for (const sessionKey of sessionKeys) {
+              sqliteDeleteKeys.add(sessionKey);
             }
 
             await Promise.allSettled(
@@ -700,6 +818,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           await client.sessionsDelete(id);
         }
 
+        const sqliteDeleteResults = await Promise.allSettled(
+          Array.from(sqliteDeleteKeys).map(async (sessionKey) => {
+            const sqliteRes = await fetch(`/api/sessions/${encodeURIComponent(sessionKey)}`, {
+              method: "DELETE",
+            });
+            if (!sqliteRes.ok) {
+              throw new Error(`Failed to delete SQLite session ${sessionKey}: ${sqliteRes.status}`);
+            }
+          })
+        );
+        for (const result of sqliteDeleteResults) {
+          if (result.status === "rejected") {
+            console.warn("[Session] Failed to delete SQLite session:", result.reason);
+          }
+        }
+
         // 从列表中移除
         setSessions((prev) => prev.filter((s) => s.id !== id));
 
@@ -715,7 +849,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         return false;
       }
     },
-    [client, isConnected]
+    [client, isConnected, sessions]
   );
 
   // 切换当前会话
