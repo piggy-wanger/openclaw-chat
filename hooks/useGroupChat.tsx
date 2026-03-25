@@ -202,7 +202,6 @@ export function GroupChatProvider({
   const completedRunsRef = useRef<Set<string>>(new Set());
   const groupFetchEpochRef = useRef(0);
   const groupFetchAbortRef = useRef<AbortController | null>(null);
-  const hasLoadedOnceRef = useRef(false);
 
   const setStreamingMapState = useCallback(
     (updater: Map<string, StreamingState> | ((prev: Map<string, StreamingState>) => Map<string, StreamingState>)) => {
@@ -256,7 +255,7 @@ export function GroupChatProvider({
       if (loadMore) {
         setIsLoadingMore(false);
       } else {
-        hasLoadedOnceRef.current = true;
+        console.log("[GroupChat] setIsSessionSwitching(false) after fetchMessages", { groupId });
         setIsSessionSwitching(false);
       }
     }
@@ -276,6 +275,7 @@ export function GroupChatProvider({
       setIsLoadingMore(false);
       setIsSessionSwitching(false);
       setLoading(false);
+      console.log("[GroupChat] setIsSessionSwitching(false) because groupId is null");
       return;
     }
 
@@ -308,6 +308,8 @@ export function GroupChatProvider({
       setMembers([]);
       setMessages([]);
       setHasMoreMessages(false);
+      console.log("[GroupChat] setIsSessionSwitching(false) due to fetchGroupData error", { groupId });
+      setIsSessionSwitching(false);
     } finally {
       if (currentEpoch === groupFetchEpochRef.current) {
         setLoading(false);
@@ -740,6 +742,13 @@ export function GroupChatProvider({
   }, [client, setStreamingMapState]);
 
   useEffect(() => {
+    if (groupId) {
+      console.log("[GroupChat] setIsSessionSwitching(true) on groupId change", { groupId });
+      setIsSessionSwitching(true);
+    } else {
+      setIsSessionSwitching(false);
+    }
+
     setStreamingMapState(new Map());
     agentToSessionKeyRef.current.clear();
     sessionKeyToAgentRef.current.clear();
@@ -769,17 +778,6 @@ export function GroupChatProvider({
       groupFetchAbortRef.current = null;
     };
   }, [groupId, abortStream, fetchGroupData, setStreamingMapState]);
-
-  useEffect(() => {
-    if (!groupId) {
-      setIsSessionSwitching(false);
-      return;
-    }
-
-    if (hasLoadedOnceRef.current) {
-      setIsSessionSwitching(true);
-    }
-  }, [groupId]);
 
   const value = useMemo<GroupChatContextType>(
     () => ({
