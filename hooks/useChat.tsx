@@ -31,9 +31,153 @@ type ChatContextType = {
   fetchMessages: () => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
   abortStream: () => void;
+  syncFromGateway: () => Promise<number>;
 };
 
 const ChatContext = createContext<ChatContextType | null>(null);
+
+// ========== Helper: Save message to SQLite ==========
+
+async function saveMessageToSQLite(message: {
+  id: string;
+  sessionId: string;
+  role: string;
+  content: string;
+  toolCalls?: string;
+  runId?: string;
+  createdAt: number;
+}): Promise<void> {
+  try {
+    await fetch("/api/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(message),
+    });
+  } catch (err) {
+    console.error("[saveMessageToSQLite] Error:", err);
+  }
+}
+
+// ========== Helper: Load messages from SQLite ==========
+
+async function loadMessagesFromSQLite(sessionId: string): Promise<Message[]> {
+  try {
+    const res = await fetch(`/api/messages?sessionId=${encodeURIComponent(sessionId)}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!Array.isArray(data.messages)) return [];
+
+    return data.messages.map((row: {
+      id: string;
+      sessionId: string;
+      role: string;
+      content: string;
+      toolCalls: string | null;
+      runId: string | null;
+      createdAt: number;
+    }) => {
+      const msg: Message = {
+        id: row.id,
+        sessionId: row.sessionId,
+        role: row.role,
+        content: row.content,
+        createdAt: row.createdAt,
+      };
+
+      if (row.toolCalls) {
+        try {
+          msg.toolCalls = JSON.parse(row.toolCalls);
+        } catch { /* ignore */ }
+      }
+
+      return msg;
+    });
+  } catch (err) {
+    console.error("[loadMessagesFromSQLite] Error:", err);
+    return [];
+  }
+}
+
+// ========== Helper: Sync messages from Gateway to SQLite ==========
+
+async function syncMessagesToSQLite(
+  sessionId: string,
+  client: { chatHistory: (opts: { sessionKey: string; limit: number }) => Promise<unknown> }
+): Promise<number> {
+  try {
+    const history = await client.chatHistory({
+      sessionKey: sessionId,
+      limit: 200,
+    });
+
+    const historyData = history as unknown as Record<string, unknown>;
+    const messagesArr = Array.isArray(historyData?.messages)
+      ? historyData.messages
+      : Array.isArray(history)
+        ? history
+        : [];
+
+    if (messagesArr.length === 0) return 0;
+
+    const syncMessages: {
+      id: string;
+      role: string;
+      content: string;
+      toolCalls?: string;
+      runId?: string;
+      createdAt: number;
+    }[] = [];
+
+    for (const item of messagesArr) {
+      if (typeof item !== "object" || item === null) continue;
+      const msg = item as Record<string, unknown>;
+      const role = (msg.role as string)?.toLowerCase();
+
+      // Skip tool_result messages
+      if (role === "tool" || role === "tool_result" || role === "toolresult" || role === "function") {
+        continue;
+      }
+
+      const rawContent = msg.content ?? (msg.message as Record<string, unknown>)?.content;
+      let contentStr: string;
+
+      if (typeof rawContent === "string") {
+        contentStr = rawContent;
+      } else if (Array.isArray(rawContent)) {
+        contentStr = JSON.stringify(rawContent);
+      } else if (rawContent && typeof rawContent === "object") {
+        contentStr = JSON.stringify(rawContent);
+      } else {
+        contentStr = String(rawContent ?? "");
+      }
+
+      syncMessages.push({
+        id: (msg.id as string) || `msg-${nanoid()}`,
+        role: (msg.role as string) || "user",
+        content: contentStr,
+        toolCalls: msg.toolCalls ? JSON.stringify(msg.toolCalls) : undefined,
+        runId: msg.runId as string | undefined,
+        createdAt: (msg.createdAt as number) || Date.now(),
+      });
+    }
+
+    if (syncMessages.length === 0) return 0;
+
+    await fetch("/api/messages/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        messages: syncMessages,
+      }),
+    });
+
+    return syncMessages.length;
+  } catch (err) {
+    console.error("[syncMessagesToSQLite] Error:", err);
+    return 0;
+  }
+}
 
 // ========== Provider ==========
 
@@ -75,7 +219,23 @@ export function ChatProvider({
     });
   }, [sessionId]);
 
-  // 获取会话消息
+  // 同步消息从 Gateway 到 SQLite
+  const syncFromGateway = useCallback(async (): Promise<number> => {
+    if (!sessionId || !isConnected) return 0;
+    const count = await syncMessagesToSQLite(sessionId, client);
+
+    // 同步完成后，重新从 SQLite 加载消息
+    if (count > 0) {
+      const sqliteMessages = await loadMessagesFromSQLite(sessionId);
+      if (sqliteMessages.length > 0) {
+        setMessagesWithCache(sqliteMessages);
+      }
+    }
+
+    return count;
+  }, [sessionId, client, isConnected, setMessagesWithCache]);
+
+  // 获取会话消息：先从 SQLite 加载
   const fetchMessages = useCallback(async () => {
     if (!sessionId || !isConnected) return;
 
@@ -89,6 +249,21 @@ export function ChatProvider({
     setError(null);
 
     try {
+      // 1. 先从 SQLite 加载
+      const sqliteMessages = await loadMessagesFromSQLite(sessionId);
+
+      if (currentEpoch !== sessionEpochRef.current) return;
+
+      // 内存缓存优先（保留 streaming 时组装的完整 toolCalls）
+      const cached = sessionId ? messagesCacheRef.current.get(sessionId) : null;
+
+      if (cached && cached.length > 0) {
+        setMessagesWithCache(cached);
+      } else if (sqliteMessages.length > 0) {
+        setMessagesWithCache(sqliteMessages);
+      }
+
+      // 2. 同时从 Gateway 获取最新消息（用于 WebSocket 实时补充）
       const history = await client.chatHistory({
         sessionKey: sessionId,
         limit: 100,
@@ -103,12 +278,19 @@ export function ChatProvider({
 
       const formatted = parseGatewayMessages(messagesArr, sessionId);
 
-      // 内存缓存优先（保留 streaming 时组装的完整 toolCalls）
-      const cached = sessionId ? messagesCacheRef.current.get(sessionId) : null;
-      if (cached && cached.length > 0) {
-        setMessagesWithCache(cached);
-      } else if (formatted.length > 0) {
-        setMessagesWithCache(formatted);
+      // 合并：SQLite 消息 + Gateway 新消息（去重）
+      if (formatted.length > 0) {
+        const existingIds = new Set(sqliteMessages.map((m) => m.id));
+        const newFromGateway = formatted.filter((m) => !existingIds.has(m.id));
+
+        if (newFromGateway.length > 0) {
+          setMessagesWithCache((prev) => {
+            const merged = [...prev, ...newFromGateway];
+            // 按 createdAt 排序
+            merged.sort((a, b) => a.createdAt - b.createdAt);
+            return merged;
+          });
+        }
       }
 
       hasLoadedOnceRef.current = true;
@@ -124,7 +306,7 @@ export function ChatProvider({
         setIsSessionSwitching(false);
       }
     }
-  }, [sessionId, client, isConnected]);
+  }, [sessionId, client, isConnected, setMessagesWithCache]);
 
   // 发送消息
   const sendMessage = useCallback(
@@ -133,12 +315,14 @@ export function ChatProvider({
 
       setError(null);
 
+      const userMsgId = `msg-user-${nanoid()}`;
+      const createdAt = Date.now();
       const tempUserMessage: Message = {
-        id: `temp-user-${nanoid()}`,
+        id: userMsgId,
         sessionId,
         role: "user",
         content: content.trim(),
-        createdAt: Date.now(),
+        createdAt,
       };
 
       setMessagesWithCache((prev) => [...prev, tempUserMessage]);
@@ -153,6 +337,15 @@ export function ChatProvider({
           idempotencyKey: nanoid(),
         });
         currentRunIdRef.current = result.runId;
+
+        // 发送成功后，持久化 user 消息到 SQLite
+        await saveMessageToSQLite({
+          id: userMsgId,
+          sessionId,
+          role: "user",
+          content: content.trim(),
+          createdAt,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to send message";
         setError(message);
@@ -160,7 +353,7 @@ export function ChatProvider({
         setIsStreaming(false);
       }
     },
-    [sessionId, isStreaming, isConnected, client]
+    [sessionId, isStreaming, isConnected, client, setMessagesWithCache]
   );
 
   // 中断流式请求
@@ -187,7 +380,7 @@ export function ChatProvider({
 
   // 处理 chat 事件
   useEffect(() => {
-    const handleChat = (event: ChatEvent) => {
+    const handleChat = async (event: ChatEvent) => {
       const isTempSession = sessionId?.startsWith("temp-");
 
       if (isTempSession && sessionId && !event.sessionKey.startsWith("temp-")) {
@@ -207,6 +400,9 @@ export function ChatProvider({
         case "final": {
           const rawMessage = event.message;
           let finalUsed = false;
+          let assistantMsgId = `msg-final-${nanoid()}`;
+          let assistantContent: string | ContentBlock[] = "";
+          let assistantToolCalls: ToolCall[] | undefined;
 
           if (rawMessage) {
             const rawContent = typeof rawMessage === "object" && rawMessage !== null && "content" in (rawMessage as Record<string, unknown>)
@@ -273,25 +469,29 @@ export function ChatProvider({
             }
 
             if (blocks) {
+              assistantContent = blocks;
+              assistantToolCalls = finalToolCalls.length > 0 ? finalToolCalls : undefined;
               setMessagesWithCache((prev) => [...prev, {
-                id: `msg-final-${nanoid()}`,
+                id: assistantMsgId,
                 sessionId: sessionId || "",
                 role: "assistant",
-                content: blocks,
+                content: assistantContent,
                 createdAt: Date.now(),
-                toolCalls: finalToolCalls.length > 0 ? finalToolCalls : undefined,
+                toolCalls: assistantToolCalls,
               }]);
               finalUsed = true;
             } else {
               const textContent = extractContent(parsedFinalContent);
               if (textContent) {
+                assistantContent = textContent;
+                assistantToolCalls = finalToolCalls.length > 0 ? finalToolCalls : undefined;
                 setMessagesWithCache((prev) => [...prev, {
-                  id: `msg-final-${nanoid()}`,
+                  id: assistantMsgId,
                   sessionId: sessionId || "",
                   role: "assistant",
-                  content: textContent,
+                  content: assistantContent,
                   createdAt: Date.now(),
-                  toolCalls: finalToolCalls.length > 0 ? finalToolCalls : undefined,
+                  toolCalls: assistantToolCalls,
                 }]);
                 finalUsed = true;
               }
@@ -299,15 +499,33 @@ export function ChatProvider({
           }
 
           if (!finalUsed && streamContentRef.current?.trim()) {
+            assistantContent = streamContentRef.current;
+            assistantToolCalls = toolCallsRef.current.length > 0 ? toolCallsRef.current : undefined;
             setMessagesWithCache((prev) => [...prev, {
-              id: `msg-final-${nanoid()}`,
+              id: assistantMsgId,
               sessionId: sessionId || "",
               role: "assistant",
-              content: streamContentRef.current,
+              content: assistantContent,
               createdAt: Date.now(),
-              toolCalls: toolCallsRef.current.length > 0 ? toolCallsRef.current : undefined,
+              toolCalls: assistantToolCalls,
             }]);
           }
+
+          // 持久化 assistant 消息到 SQLite
+          const createdAt = Date.now();
+          const contentStr = typeof assistantContent === "string"
+            ? assistantContent
+            : JSON.stringify(assistantContent);
+
+          await saveMessageToSQLite({
+            id: assistantMsgId,
+            sessionId: sessionId || "",
+            role: "assistant",
+            content: contentStr,
+            toolCalls: assistantToolCalls ? JSON.stringify(assistantToolCalls) : undefined,
+            runId: currentRunIdRef.current || undefined,
+            createdAt,
+          });
 
           streamContentRef.current = "";
           setStreamContent("");
@@ -333,7 +551,7 @@ export function ChatProvider({
 
     const unsubscribe = client.on("chat", handleChat);
     return () => unsubscribe();
-  }, [sessionId, client, onSessionKeyUpdate]);
+  }, [sessionId, client, onSessionKeyUpdate, setMessagesWithCache]);
 
   // 处理 agent 事件（工具调用 + 流式助手回复）
   useEffect(() => {
@@ -433,6 +651,7 @@ export function ChatProvider({
         fetchMessages,
         sendMessage,
         abortStream,
+        syncFromGateway,
       }}
     >
       {children}
