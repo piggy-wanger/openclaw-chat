@@ -28,7 +28,8 @@ export async function PUT(
     await db
       .update(sessions)
       .set({
-        displayName: normalizedDisplayName ?? undefined,
+        displayName: normalizedDisplayName || null,
+        model: body.model?.trim() || null,
         updatedAt: Date.now(),
       })
       .where(eq(sessions.id, id));

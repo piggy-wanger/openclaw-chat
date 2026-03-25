@@ -30,39 +30,48 @@ export async function POST(
     const list = Array.isArray(body.sessions) ? body.sessions : [];
     const now = Date.now();
 
-    db.transaction((tx) => {
-      tx.delete(sessions).run();
-
-      if (list.length > 0) {
-        tx.insert(sessions)
-          .values(
-            list
-              .filter((item) => Boolean(item?.id))
-              .map((item) => {
-                const sessionName = item.sessionName?.trim() || null;
-                const displayName = item.displayName?.trim() || sessionName || null;
-                return {
-                  id: item.id,
-                  displayName,
-                  readableKey: item.readableKey?.trim() || null,
-                  sessionName,
-                  agentId: item.agentId?.trim() || null,
-                  type: item.type || "direct",
-                  model: item.model?.trim() || null,
-                  createdAt:
-                    typeof item.createdAt === "number" && Number.isFinite(item.createdAt)
-                      ? item.createdAt
-                      : now,
-                  updatedAt:
-                    typeof item.updatedAt === "number" && Number.isFinite(item.updatedAt)
-                      ? item.updatedAt
-                      : now,
-                };
-              })
-          )
+    // Upsert: Gateway 有的更新，SQLite 独有的保留（不删除）
+    if (list.length > 0) {
+      for (const item of list) {
+        if (!item?.id) continue;
+        const sessionName = item.sessionName?.trim() || null;
+        const displayName = item.displayName?.trim() || sessionName || null;
+        db.insert(sessions)
+          .values({
+            id: item.id,
+            displayName,
+            readableKey: item.readableKey?.trim() || null,
+            sessionName,
+            agentId: item.agentId?.trim() || null,
+            type: item.type || "direct",
+            model: item.model?.trim() || null,
+            createdAt:
+              typeof item.createdAt === "number" && Number.isFinite(item.createdAt)
+                ? item.createdAt
+                : now,
+            updatedAt:
+              typeof item.updatedAt === "number" && Number.isFinite(item.updatedAt)
+                ? item.updatedAt
+                : now,
+          })
+          .onConflictDoUpdate({
+            target: sessions.id,
+            set: {
+              displayName: displayName,
+              readableKey: item.readableKey?.trim() || null,
+              sessionName,
+              agentId: item.agentId?.trim() || null,
+              type: item.type || "direct",
+              model: item.model?.trim() || null,
+              updatedAt:
+                typeof item.updatedAt === "number" && Number.isFinite(item.updatedAt)
+                  ? Math.max(item.updatedAt, now)
+                  : now,
+            },
+          })
           .run();
       }
-    });
+    }
 
     return NextResponse.json({ success: true, count: list.length });
   } catch (error) {
