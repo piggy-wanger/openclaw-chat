@@ -249,7 +249,7 @@ export function ChatProvider({
     setError(null);
 
     try {
-      // 1. 先从 SQLite 加载
+      // 从 SQLite 加载历史消息
       const sqliteMessages = await loadMessagesFromSQLite(sessionId);
 
       if (currentEpoch !== sessionEpochRef.current) return;
@@ -261,36 +261,6 @@ export function ChatProvider({
         setMessagesWithCache(cached);
       } else if (sqliteMessages.length > 0) {
         setMessagesWithCache(sqliteMessages);
-      }
-
-      // 2. 同时从 Gateway 获取最新消息（用于 WebSocket 实时补充）
-      const history = await client.chatHistory({
-        sessionKey: sessionId,
-        limit: 100,
-      });
-
-      if (currentEpoch !== sessionEpochRef.current) return;
-
-      const historyData = history as unknown as Record<string, unknown>;
-      const messagesArr = Array.isArray(historyData?.messages) ? historyData.messages : Array.isArray(history) ? history : [];
-
-      if (currentEpoch !== sessionEpochRef.current) return;
-
-      const formatted = parseGatewayMessages(messagesArr, sessionId);
-
-      // 合并：SQLite 消息 + Gateway 新消息（去重）
-      if (formatted.length > 0) {
-        const existingIds = new Set(sqliteMessages.map((m) => m.id));
-        const newFromGateway = formatted.filter((m) => !existingIds.has(m.id));
-
-        if (newFromGateway.length > 0) {
-          setMessagesWithCache((prev) => {
-            const merged = [...prev, ...newFromGateway];
-            // 按 createdAt 排序
-            merged.sort((a, b) => a.createdAt - b.createdAt);
-            return merged;
-          });
-        }
       }
 
       hasLoadedOnceRef.current = true;
