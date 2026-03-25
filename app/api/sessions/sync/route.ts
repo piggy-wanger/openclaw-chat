@@ -30,16 +30,18 @@ export async function POST(
     const list = Array.isArray(body.sessions) ? body.sessions : [];
     const now = Date.now();
 
-    // Upsert: Gateway 有的更新，SQLite 独有的保留（不删除）
+    // Upsert: 存在时只更新非空字段，displayName 保留本地值不覆盖
     if (list.length > 0) {
       for (const item of list) {
         if (!item?.id) continue;
         const sessionName = item.sessionName?.trim() || null;
-        const displayName = item.displayName?.trim() || sessionName || null;
+        const gwDisplayName = item.displayName?.trim() || null;
+        const now2 = Date.now();
+
         db.insert(sessions)
           .values({
             id: item.id,
-            displayName,
+            displayName: gwDisplayName,
             readableKey: item.readableKey?.trim() || null,
             sessionName,
             agentId: item.agentId?.trim() || null,
@@ -48,16 +50,15 @@ export async function POST(
             createdAt:
               typeof item.createdAt === "number" && Number.isFinite(item.createdAt)
                 ? item.createdAt
-                : now,
+                : now2,
             updatedAt:
               typeof item.updatedAt === "number" && Number.isFinite(item.updatedAt)
                 ? item.updatedAt
-                : now,
+                : now2,
           })
           .onConflictDoUpdate({
             target: sessions.id,
             set: {
-              displayName: displayName,
               readableKey: item.readableKey?.trim() || null,
               sessionName,
               agentId: item.agentId?.trim() || null,
@@ -65,8 +66,8 @@ export async function POST(
               model: item.model?.trim() || null,
               updatedAt:
                 typeof item.updatedAt === "number" && Number.isFinite(item.updatedAt)
-                  ? Math.max(item.updatedAt, now)
-                  : now,
+                  ? Math.max(item.updatedAt, now2)
+                  : now2,
             },
           })
           .run();
