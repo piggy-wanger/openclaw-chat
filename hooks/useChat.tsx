@@ -67,7 +67,7 @@ async function loadMessagesFromSQLite(sessionId: string): Promise<Message[]> {
     const data = await res.json();
     if (!Array.isArray(data.messages)) return [];
 
-    return data.messages.map((row: {
+    const parsedMessages = data.messages.map((row: {
       id: string;
       sessionId: string;
       role: string;
@@ -76,11 +76,35 @@ async function loadMessagesFromSQLite(sessionId: string): Promise<Message[]> {
       runId: string | null;
       createdAt: number;
     }) => {
+      // Bug 3 修复：解析 user 消息的 content
+      let content: string | ContentBlock[] = row.content;
+      if (row.role === "user" && typeof row.content === "string") {
+        // 尝试解析 JSON block 格式如 [{"type":"text","text":"收到 🦌"}]
+        if (row.content.trim().startsWith("[")) {
+          try {
+            const blocks = JSON.parse(row.content);
+            if (Array.isArray(blocks)) {
+              const texts = blocks
+                .filter((b: { type?: string }) => b.type === "text")
+                .map((b: { text?: string }) => b.text)
+                .filter(Boolean)
+                .join("");
+              if (texts) {
+                content = texts;
+              }
+            }
+          } catch {
+            // 保持原样
+          }
+        }
+      }
+      // assistant 消息保持原样，MessageItem 的 parseContentBlocks 会处理
+
       const msg: Message = {
         id: row.id,
         sessionId: row.sessionId,
         role: row.role,
-        content: row.content,
+        content,
         createdAt: row.createdAt,
       };
 
@@ -92,6 +116,9 @@ async function loadMessagesFromSQLite(sessionId: string): Promise<Message[]> {
 
       return msg;
     });
+
+    // Bug 2 修复：按 createdAt 升序排列
+    return parsedMessages.sort((a, b) => a.createdAt - b.createdAt);
   } catch (err) {
     console.error("[loadMessagesFromSQLite] Error:", err);
     return [];
@@ -225,13 +252,9 @@ export function ChatProvider({
     if (!sessionId || !isConnected) return 0;
     const count = await syncMessagesToSQLite(sessionId, client);
 
-    // 同步完成后，重新从 SQLite 加载消息
-    if (count > 0) {
-      const sqliteMessages = await loadMessagesFromSQLite(sessionId);
-      if (sqliteMessages.length > 0) {
-        setMessagesWithCache(sqliteMessages);
-      }
-    }
+    // Bug 1 修复：同步后总是从 SQLite 重新加载完整消息列表，替换而非追加
+    const sqliteMessages = await loadMessagesFromSQLite(sessionId);
+    setMessagesWithCache(sqliteMessages);
 
     return count;
   }, [sessionId, client, isConnected, setMessagesWithCache]);
