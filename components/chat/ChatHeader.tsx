@@ -266,6 +266,18 @@ export function ChatHeader({
             </SelectContent>
           </Select>
           )}
+          {onSync && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleSync}
+              disabled={syncing || !currentSession}
+              aria-label="同步消息"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+            </Button>
+          )}
         </div>
       )}
 
