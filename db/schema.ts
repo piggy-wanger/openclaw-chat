@@ -77,7 +77,33 @@ export const groupMessages = sqliteTable("group_messages", {
   createdAt: integer("created_at").notNull().$defaultFn(() => Date.now()),
 });
 
+// Messages table (单聊聊天记录)
+export const messages = sqliteTable("messages", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id")
+    .notNull()
+    .references(() => sessions.id, { onDelete: "cascade" }),
+  role: text("role").notNull(), // user / assistant / system
+  content: text("content").notNull(),
+  toolCalls: text("tool_calls"), // JSON 字符串
+  runId: text("run_id"),
+  createdAt: integer("created_at").notNull(),
+}, (table) => ({
+  dedupIdx: uniqueIndex("uniq_messages_dedup").on(table.sessionId, table.runId, table.role),
+}));
+
 // Relations
+export const sessionsRelations = relations(sessions, ({ many }) => ({
+  messages: many(messages),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  session: one(sessions, {
+    fields: [messages.sessionId],
+    references: [sessions.id],
+  }),
+}));
+
 export const groupsRelations = relations(groups, ({ many }) => ({
   members: many(groupMembers),
   messages: many(groupMessages),
@@ -101,9 +127,12 @@ export const groupMessagesRelations = relations(groupMessages, ({ one }) => ({
 export const schema = {
   sessions,
   agents,
+  messages,
   groups,
   groupMembers,
   groupMessages,
+  sessionsRelations,
+  messagesRelations,
   groupsRelations,
   groupMembersRelations,
   groupMessagesRelations,
