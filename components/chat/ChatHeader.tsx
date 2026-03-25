@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { PanelLeft, PanelLeftClose, Loader2, Settings, RefreshCw } from "lucide-react";
+import { PanelLeft, PanelLeftClose, Loader2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
-import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -63,7 +62,6 @@ interface ChatHeaderProps {
   groupMembers?: GroupMember[];
   onGroupUpdated?: () => void;
   onGroupDeleted?: () => void;
-  onSync?: () => Promise<number>;
 }
 
 export function ChatHeader({
@@ -77,14 +75,12 @@ export function ChatHeader({
   groupMembers = [],
   onGroupUpdated,
   onGroupDeleted,
-  onSync,
 }: ChatHeaderProps) {
   const { status, client, isConnected } = useGateway();
   const { settings } = useSettings();
   const [models, setModels] = useState<GatewayModel[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
-  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     if (!isConnected) {
@@ -152,24 +148,6 @@ export function ChatHeader({
   const subtitle = isGroup ? `${groupMembers.length} 个智能体` : null;
   const shownMembers = groupMembers.slice(0, 5);
   const hiddenCount = Math.max(groupMembers.length - shownMembers.length, 0);
-
-  const handleSync = async () => {
-    if (!onSync || syncing) return;
-    setSyncing(true);
-    try {
-      const count = await onSync();
-      if (count > 0) {
-        toast.success(`已同步 ${count} 条消息`);
-      } else {
-        toast.success("同步完成，无新消息");
-      }
-    } catch (err) {
-      toast.error("同步失败");
-      console.error("[handleSync] Error:", err);
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   return (
     <header className="flex items-center justify-between px-4 py-3 border-b border-border bg-card/50">
@@ -265,18 +243,6 @@ export function ChatHeader({
               )}
             </SelectContent>
           </Select>
-          )}
-          {onSync && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleSync}
-              disabled={syncing || !currentSession}
-              aria-label="同步消息"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
-            </Button>
           )}
         </div>
       )}

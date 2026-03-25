@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { useGateway } from "./useGateway";
+import { useSession } from "./useSession";
 import type { ChatEvent, AgentEvent } from "@/lib/gateway-types";
 import type { Message, ToolCall, ToolCallStatus, ContentBlock } from "@/lib/types";
 import { extractTextContent, parseContentBlocks } from "@/lib/contentBlocks";
@@ -31,7 +32,6 @@ type ChatContextType = {
   fetchMessages: () => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
   abortStream: () => void;
-  syncFromGateway: () => Promise<number>;
 };
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -76,15 +76,13 @@ async function loadMessagesFromSQLite(sessionId: string): Promise<Message[]> {
       runId: string | null;
       createdAt: number;
     }) => {
-      // Bug 3 修复：解析 user 消息的 content
       let content: string | ContentBlock[] = row.content;
-      if (row.role === "user" && typeof row.content === "string") {
-        // 尝试解析 JSON block 格式如 [{"type":"text","text":"收到 🦌"}]
-        if (row.content.trim().startsWith("[")) {
-          try {
-            const blocks = JSON.parse(row.content);
-            if (Array.isArray(blocks)) {
-              const texts = blocks
+      if (typeof row.content === "string" && row.content.trim().startsWith("[")) {
+        try {
+          const parsed = JSON.parse(row.content);
+          if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.type) {
+            if (row.role === "user") {
+              const texts = parsed
                 .filter((b: { type?: string }) => b.type === "text")
                 .map((b: { text?: string }) => b.text)
                 .filter(Boolean)
@@ -92,13 +90,14 @@ async function loadMessagesFromSQLite(sessionId: string): Promise<Message[]> {
               if (texts) {
                 content = texts;
               }
+            } else {
+              content = parsed as ContentBlock[];
             }
-          } catch {
-            // 保持原样
           }
+        } catch {
+          // keep as-is
         }
       }
-      // assistant 消息保持原样，MessageItem 的 parseContentBlocks 会处理
 
       const msg: Message = {
         id: row.id,
@@ -117,93 +116,10 @@ async function loadMessagesFromSQLite(sessionId: string): Promise<Message[]> {
       return msg;
     });
 
-    // Bug 2 修复：按 createdAt 升序排列
     return parsedMessages.sort((a, b) => a.createdAt - b.createdAt);
   } catch (err) {
     console.error("[loadMessagesFromSQLite] Error:", err);
     return [];
-  }
-}
-
-// ========== Helper: Sync messages from Gateway to SQLite ==========
-
-async function syncMessagesToSQLite(
-  sessionId: string,
-  client: { chatHistory: (opts: { sessionKey: string; limit: number }) => Promise<unknown> }
-): Promise<number> {
-  try {
-    const history = await client.chatHistory({
-      sessionKey: sessionId,
-      limit: 200,
-    });
-
-    const historyData = history as unknown as Record<string, unknown>;
-    const messagesArr = Array.isArray(historyData?.messages)
-      ? historyData.messages
-      : Array.isArray(history)
-        ? history
-        : [];
-
-    if (messagesArr.length === 0) return 0;
-
-    const syncMessages: {
-      id: string;
-      role: string;
-      content: string;
-      toolCalls?: string;
-      runId?: string;
-      createdAt: number;
-    }[] = [];
-
-    for (const item of messagesArr) {
-      if (typeof item !== "object" || item === null) continue;
-      const msg = item as Record<string, unknown>;
-      const role = (msg.role as string)?.toLowerCase();
-
-      // Skip tool_result messages
-      if (role === "tool" || role === "tool_result" || role === "toolresult" || role === "function") {
-        continue;
-      }
-
-      const rawContent = msg.content ?? (msg.message as Record<string, unknown>)?.content;
-      let contentStr: string;
-
-      if (typeof rawContent === "string") {
-        contentStr = rawContent;
-      } else if (Array.isArray(rawContent)) {
-        contentStr = JSON.stringify(rawContent);
-      } else if (rawContent && typeof rawContent === "object") {
-        contentStr = JSON.stringify(rawContent);
-      } else {
-        contentStr = String(rawContent ?? "");
-      }
-
-      const msgRunId = (msg.runId as string) || undefined;
-      syncMessages.push({
-        id: msgRunId ? `msg-${role}-${msgRunId}` : ((msg.id as string) || `msg-${nanoid()}`),
-        role: (msg.role as string) || "user",
-        content: contentStr,
-        toolCalls: msg.toolCalls ? JSON.stringify(msg.toolCalls) : undefined,
-        runId: msgRunId,
-        createdAt: (msg.createdAt as number) || Date.now(),
-      });
-    }
-
-    if (syncMessages.length === 0) return 0;
-
-    await fetch("/api/messages/sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId,
-        messages: syncMessages,
-      }),
-    });
-
-    return syncMessages.length;
-  } catch (err) {
-    console.error("[syncMessagesToSQLite] Error:", err);
-    return 0;
   }
 }
 
@@ -219,6 +135,7 @@ export function ChatProvider({
   onSessionKeyUpdate?: (tempId: string, realSessionKey: string) => void;
 }) {
   const { client, isConnected } = useGateway();
+  const { touchSession } = useSession();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState("");
@@ -246,18 +163,6 @@ export function ChatProvider({
       return next;
     });
   }, [sessionId]);
-
-  // 同步消息从 Gateway 到 SQLite
-  const syncFromGateway = useCallback(async (): Promise<number> => {
-    if (!sessionId || !isConnected) return 0;
-    const count = await syncMessagesToSQLite(sessionId, client);
-
-    // Bug 1 修复：同步后总是从 SQLite 重新加载完整消息列表，替换而非追加
-    const sqliteMessages = await loadMessagesFromSQLite(sessionId);
-    setMessagesWithCache(sqliteMessages);
-
-    return count;
-  }, [sessionId, client, isConnected, setMessagesWithCache]);
 
   // 获取会话消息：先从 SQLite 加载
   const fetchMessages = useCallback(async () => {
@@ -345,6 +250,7 @@ export function ChatProvider({
           runId: result.runId,
           createdAt,
         });
+        touchSession(sessionId);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to send message";
         setError(message);
@@ -352,7 +258,7 @@ export function ChatProvider({
         setIsStreaming(false);
       }
     },
-    [sessionId, isStreaming, isConnected, client, setMessagesWithCache]
+    [sessionId, isStreaming, isConnected, client, setMessagesWithCache, touchSession]
   );
 
   // 中断流式请求
@@ -399,7 +305,7 @@ export function ChatProvider({
         case "final": {
           const rawMessage = event.message;
           let finalUsed = false;
-          let assistantMsgId = `msg-final-${event.runId || nanoid()}`;
+          let assistantMsgId = `msg-assistant-${event.runId || nanoid()}`;
           let assistantContent: string | ContentBlock[] = "";
           let assistantToolCalls: ToolCall[] | undefined;
 
@@ -525,6 +431,7 @@ export function ChatProvider({
             runId: currentRunIdRef.current || undefined,
             createdAt,
           });
+          if (sessionId) touchSession(sessionId);
 
           streamContentRef.current = "";
           setStreamContent("");
@@ -650,124 +557,11 @@ export function ChatProvider({
         fetchMessages,
         sendMessage,
         abortStream,
-        syncFromGateway,
       }}
     >
       {children}
     </ChatContext.Provider>
   );
-}
-
-// ========== 辅助函数 ==========
-
-/** 解析 Gateway chat.history 返回的原始消息数组 */
-function parseGatewayMessages(messagesArr: unknown[], sessionId: string): Message[] {
-  const toolInfoMap = new Map<string, { name: string; input: Record<string, unknown> }>();
-  const toolResultMap = new Map<string, { result: string; isError: boolean }>();
-
-  // 第一遍：收集所有 assistant content blocks 里的 toolCall/tool_use（name + arguments）
-  for (const item of messagesArr) {
-    if (typeof item !== "object" || item === null) continue;
-    const msg = item as Record<string, unknown>;
-    const role = (msg.role as string)?.toLowerCase();
-    if (role !== "assistant") continue;
-
-    const rawContent = msg.content ?? (msg.message as Record<string, unknown>)?.content;
-    let parsedContent: unknown = rawContent;
-    if (typeof rawContent === "string" && rawContent.trim().startsWith("[")) {
-      try { parsedContent = JSON.parse(rawContent); } catch { /* keep as string */ }
-    }
-    const blocks = parseContentBlocks(parsedContent);
-    if (!blocks) continue;
-
-    for (const block of blocks) {
-      if (block.type === "toolCall") {
-        toolInfoMap.set(block.id, {
-          name: block.name,
-          input: (block as import("@/lib/types").ToolCallOCBlock).arguments ?? {},
-        });
-      } else if (block.type === "tool_use") {
-        toolInfoMap.set(block.id, { name: block.name, input: block.input ?? {} });
-      } else if (block.type === "tool_call") {
-        let args: Record<string, unknown> = {};
-        try { args = JSON.parse(block.function.arguments); } catch { args = { raw: block.function.arguments }; }
-        toolInfoMap.set(block.id, { name: block.function.name, input: args });
-      }
-    }
-  }
-
-  // 第一遍补充：收集 tool_result 消息的 result
-  for (const item of messagesArr) {
-    if (typeof item !== "object" || item === null) continue;
-    const msg = item as Record<string, unknown>;
-    const role = (msg.role as string)?.toLowerCase();
-    if (role !== "tool" && role !== "tool_result" && role !== "toolresult") continue;
-
-    const toolId = msg.toolCallId ?? msg.tool_call_id ?? msg.tool_use_id ?? msg.id;
-    if (toolId) {
-      const rawResult = msg.content ?? msg.result;
-      const result = typeof rawResult === "string" ? rawResult : JSON.stringify(rawResult ?? "");
-      const isError = msg.is_error === true || msg.isError === true;
-      toolResultMap.set(toolId as string, { result, isError });
-    }
-  }
-
-  // 第二遍：组装消息
-  const formatted: Message[] = [];
-  let pendingToolCalls: ToolCall[] = [];
-
-  for (const item of messagesArr) {
-    if (typeof item !== "object" || item === null) continue;
-    const msg = item as Record<string, unknown>;
-    const role = (msg.role as string)?.toLowerCase();
-
-    // 跳过 tool_result 消息（信息已合并到 assistant 消息）
-    if (role === "tool" || role === "tool_result" || role === "toolresult" || role === "function") {
-      // 从 assistant content blocks 和 tool_result 消息合并 toolCalls
-      const toolId = msg.toolCallId ?? msg.tool_call_id ?? msg.tool_use_id ?? msg.id ?? `tool-${nanoid()}`;
-      const info = toolInfoMap.get(toolId as string);
-      const resultInfo = toolResultMap.get(toolId as string);
-      const toolName = msg.toolName ?? msg.name
-        ?? (msg.function as Record<string, unknown>)?.name
-        ?? info?.name
-        ?? "tool";
-      pendingToolCalls.push({
-        id: toolId as string,
-        name: toolName as string,
-        arguments: info?.input ?? {},
-        status: resultInfo?.isError ? "error" : "success",
-        result: resultInfo?.result,
-        startedAt: (msg.createdAt as number) || Date.now(),
-        completedAt: Date.now(),
-      });
-      continue;
-    }
-
-    const rawContent = msg.content ?? (msg.message as Record<string, unknown>)?.content;
-    let parsedContent: unknown = rawContent;
-    if (typeof rawContent === "string" && rawContent.trim().startsWith("[")) {
-      try { parsedContent = JSON.parse(rawContent); } catch { /* keep as string */ }
-    }
-    const blocks = parseContentBlocks(parsedContent);
-    const messageContent: string | ContentBlock[] = blocks ?? extractContent(parsedContent);
-
-    const message: Message = {
-      id: (msg.id as string) || `msg-${nanoid()}`,
-      sessionId,
-      role: (msg.role as string) || "user",
-      content: messageContent,
-      createdAt: (msg.createdAt as number) || Date.now(),
-    };
-
-    if (role === "assistant" && pendingToolCalls.length > 0) {
-      (message as Record<string, unknown>).toolCalls = [...pendingToolCalls];
-      pendingToolCalls = [];
-    }
-
-    formatted.push(message);
-  }
-
-  return formatted;
 }
 
 // Hook

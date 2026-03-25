@@ -177,7 +177,6 @@ function ChatArea({
     abortStream,
     fetchMessages,
     toolCalls,
-    syncFromGateway,
   } = useChat();
 
   const sidebarRef = useRef<SidebarRef>(null);
@@ -319,7 +318,6 @@ function ChatArea({
           onToggleSidebar={handleToggleSidebar}
           isSidebarOpen={sidebarOpen}
           isMobile={isMobile}
-          onSync={syncFromGateway}
         />
 
         <div className="flex-1 flex flex-col overflow-hidden bg-background relative">

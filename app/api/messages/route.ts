@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db, messages } from "@/db";
+import { db, messages, sessions } from "@/db";
 import { asc, eq } from "drizzle-orm";
 import type { ErrorResponse } from "@/lib/types";
 
@@ -77,6 +77,11 @@ export async function POST(
         createdAt: body.createdAt,
       })
       .onConflictDoNothing();
+
+    db.update(sessions)
+      .set({ updatedAt: Date.now() })
+      .where(eq(sessions.id, body.sessionId))
+      .run();
 
     return NextResponse.json({ success: true });
   } catch (error) {

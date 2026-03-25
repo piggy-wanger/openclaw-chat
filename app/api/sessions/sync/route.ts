@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sql } from "drizzle-orm";
 import { db, sessions } from "@/db";
 import type { ErrorResponse } from "@/lib/types";
 
@@ -63,8 +64,8 @@ export async function POST(
               model: item.model?.trim() || null,
               updatedAt:
                 typeof item.updatedAt === "number" && Number.isFinite(item.updatedAt)
-                  ? Math.max(item.updatedAt, now2)
-                  : now2,
+                  ? sql`MAX(${sessions.updatedAt}, ${item.updatedAt})`
+                  : sql`${sessions.updatedAt}`,
             },
           })
           .run();

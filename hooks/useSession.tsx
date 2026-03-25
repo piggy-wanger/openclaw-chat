@@ -42,6 +42,7 @@ type SessionContextType = {
   updateTempSessionId: (tempId: string, realSessionKey: string) => void;
   deleteSession: (id: string) => Promise<boolean>;
   selectSession: (id: string | null) => void;
+  touchSession: (id: string) => void;
 };
 
 // Context
@@ -853,6 +854,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setCurrentSessionId(id);
   }, []);
 
+  const touchSession = useCallback((id: string) => {
+    setSessions((prev) => {
+      const updated = prev.map((s) =>
+        s.id === id ? { ...s, updatedAt: Date.now() } : s
+      );
+      return updated.sort((a, b) => b.updatedAt - a.updatedAt);
+    });
+  }, []);
+
   // 更新临时会话 ID 为真实的 sessionKey
   const updateTempSessionId = useCallback(
     (tempId: string, realSessionKey: string) => {
@@ -911,6 +921,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         updateTempSessionId,
         deleteSession,
         selectSession,
+        touchSession,
       }}
     >
       {children}
