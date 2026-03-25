@@ -294,7 +294,6 @@ type SqliteSessionRow = {
 
 type SessionSyncPayload = {
   id: string;
-  displayName: string;
   readableKey: string;
   sessionName: string;
   agentId?: string;
@@ -439,14 +438,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           session.type === "group"
             ? session.groupId?.trim() || keyInfo.sessionName
             : keyInfo.sessionName;
-        const displayName =
-          session.type === "group"
-            ? session.title?.trim() || sessionName
-            : session.displayName?.trim() || session.title?.trim() || sessionName;
 
         return {
           id: session.id,
-          displayName,
           readableKey: keyInfo.readableKey,
           sessionName,
           agentId: keyInfo.agentId,

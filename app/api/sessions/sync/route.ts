@@ -6,7 +6,6 @@ export const runtime = "nodejs";
 
 type SyncSessionInput = {
   id: string;
-  displayName?: string;
   readableKey?: string;
   sessionName?: string;
   agentId?: string;
@@ -35,13 +34,11 @@ export async function POST(
       for (const item of list) {
         if (!item?.id) continue;
         const sessionName = item.sessionName?.trim() || null;
-        const gwDisplayName = item.displayName?.trim() || null;
         const now2 = Date.now();
 
         db.insert(sessions)
           .values({
             id: item.id,
-            displayName: gwDisplayName,
             readableKey: item.readableKey?.trim() || null,
             sessionName,
             agentId: item.agentId?.trim() || null,
