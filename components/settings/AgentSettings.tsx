@@ -188,20 +188,40 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
   }, [isConnected, client]);
 
   useEffect(() => {
-    if (!isConnected) return;
+    if (!isConnected || !client) return;
 
     const run = async () => {
       try {
-        await fetch("/api/agents/sync", { method: "POST" });
+        // 从 Gateway 拉取 agent 列表，发送给后端写入 SQLite
+        const result = await client.configGet();
+        const config = result.config as {
+          agents?: {
+            list?: Array<{
+              id: string;
+              model?: string;
+              workspace?: string;
+              identity?: { name?: string; emoji?: string; avatar?: string };
+            }>;
+            defaults?: { model?: { primary?: string } };
+          };
+        };
+        await fetch("/api/agents/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            agents: config.agents?.list ?? [],
+            defaultModel: config.agents?.defaults?.model?.primary ?? "",
+          }),
+        });
       } catch (error) {
-        console.error("Failed to sync agents:", error);
+        console.error("Failed to sync agents from Gateway:", error);
       }
       await loadAgents();
       await loadModels();
     };
 
     void run();
-  }, [isConnected, loadAgents, loadModels]);
+  }, [isConnected, client, loadAgents, loadModels]);
 
   // 获取模型的显示名称 - 格式: provider/id
   const getModelDisplayName = (model: GatewayModel): string => {
@@ -354,24 +374,33 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
 
     setSaving(true);
     try {
-      const response = await fetch("/api/agents", {
+      // 1. 先调 Gateway 创建
+      const createResult = await client!.agentsCreate({
+        name: normalizedId,
+        workspace: workspace.trim() || `~/.openclaw/workspace-${normalizedId}`,
+        emoji: emoji.trim() || undefined,
+        avatar: formData.avatar || undefined,
+      });
+      await client!.agentsUpdate({
+        agentId: createResult.agentId,
+        name: displayName.trim() || normalizedId,
+        model: model.trim(),
+        emoji: emoji.trim() || undefined,
+        avatar: formData.avatar || undefined,
+      });
+      // 2. 写 SQLite
+      await fetch("/api/agents", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: normalizedId,
-          displayName: displayName.trim(),
+          id: createResult.agentId,
+          name: displayName.trim() || normalizedId,
           model: model.trim(),
-          emoji: emoji.trim(),
-          avatar: formData.avatar,
-          workspace: workspace.trim(),
+          emoji: emoji.trim() || undefined,
+          avatar: formData.avatar || undefined,
+          workspace: workspace.trim() || undefined,
         }),
       });
-
-      if (!response.ok) {
-        throw new Error(`Failed to add agent: ${response.status}`);
-      }
 
       toast.success("智能体添加成功");
       setShowAddDialog(false);
@@ -383,7 +412,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     } finally {
       setSaving(false);
     }
-  }, [formData, loadAgents, resetForm, validateAvatarUrl]);
+  }, [client, formData, loadAgents, resetForm, validateAvatarUrl]);
 
   // 编辑智能体
   const handleEditAgent = useCallback(async () => {
@@ -404,22 +433,25 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
 
     setSaving(true);
     try {
-      const response = await fetch(`/api/agents/${editingAgent.id}`, {
+      // 1. 先调 Gateway 更新
+      await client!.agentsUpdate({
+        agentId: editingAgent.id,
+        name: displayName.trim() || undefined,
+        model: model.trim(),
+        emoji: emoji.trim() || undefined,
+        avatar: formData.avatar || undefined,
+      });
+      // 2. 写 SQLite
+      await fetch(`/api/agents/${editingAgent.id}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          displayName: displayName.trim(),
+          name: displayName.trim() || undefined,
           model: model.trim(),
-          emoji: emoji.trim(),
-          avatar: formData.avatar,
-          workspace: editingAgent.workspace || "",
+          emoji: emoji.trim() || undefined,
+          avatar: formData.avatar || undefined,
         }),
       });
-      if (!response.ok) {
-        throw new Error(`Failed to update agent: ${response.status}`);
-      }
 
       toast.success("智能体更新成功");
       setShowEditDialog(false);
@@ -432,7 +464,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     } finally {
       setSaving(false);
     }
-  }, [editingAgent, formData, loadAgents, resetForm, validateAvatarUrl]);
+  }, [client, editingAgent, formData, loadAgents, resetForm, validateAvatarUrl]);
 
   // 删除智能体
   const handleDeleteAgent = useCallback(async () => {
@@ -440,12 +472,10 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
 
     setSaving(true);
     try {
-      const response = await fetch(`/api/agents/${deletingAgent.id}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to delete agent: ${response.status}`);
-      }
+      // 1. 先调 Gateway 删除
+      await client!.agentsDelete(deletingAgent.id);
+      // 2. 删 SQLite
+      await fetch(`/api/agents/${deletingAgent.id}`, { method: "DELETE" });
 
       toast.success("智能体删除成功");
       setShowDeleteDialog(false);
@@ -457,9 +487,7 @@ export function AgentSettings({ client, gatewayStatus }: AgentSettingsProps) {
     } finally {
       setSaving(false);
     }
-  }, [deletingAgent, loadAgents]);
-
-  // 未连接时显示提示
+  }, [client, deletingAgent, loadAgents]);
   if (!isConnected) {
     return (
       <div className="space-y-6">

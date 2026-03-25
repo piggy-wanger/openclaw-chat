@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { db, agents } from "@/db";
-import { getServerGatewayClient } from "@/lib/server/gateway-server";
 import type { ErrorResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -21,54 +20,46 @@ type SyncResponse = {
   count: number;
 };
 
-// POST /api/agents/sync - Pull from Gateway config.get and fully overwrite SQLite agents table
-export async function POST(): Promise<NextResponse<SyncResponse | ErrorResponse>> {
+// POST /api/agents/sync - Frontend sends Gateway agent list, we write to SQLite
+export async function POST(
+  req: Request
+): Promise<NextResponse<SyncResponse | ErrorResponse>> {
   try {
-    const gateway = await getServerGatewayClient();
-    const result = await gateway.configGet();
-    const config = result.config as {
-      agents?: {
-        list?: GatewayAgent[];
-        defaults?: {
-          model?: {
-            primary?: string;
-          };
-        };
-      };
+    const body = (await req.json()) as {
+      agents?: GatewayAgent[];
+      defaultModel?: string;
     };
 
-    const list = config.agents?.list ?? [];
-    const defaultModel = config.agents?.defaults?.model?.primary ?? "";
+    const list = body.agents ?? [];
+    const defaultModel = body.defaultModel ?? "";
     const now = Date.now();
 
     db.transaction((tx) => {
       tx.delete(agents).run();
       if (list.length > 0) {
-        tx.insert(agents).values(
-          list.map((agent) => ({
-            id: agent.id,
-            name: agent.identity?.name || agent.id,
-            model: agent.model || defaultModel || null,
-            emoji: agent.identity?.emoji || null,
-            avatar: agent.identity?.avatar || null,
-            workspace: agent.workspace || null,
-            createdAt: now,
-            updatedAt: now,
-          }))
-        ).run();
+        tx.insert(agents)
+          .values(
+            list.map((agent) => ({
+              id: agent.id,
+              name: agent.identity?.name || agent.id,
+              model: agent.model || defaultModel || null,
+              emoji: agent.identity?.emoji || null,
+              avatar: agent.identity?.avatar || null,
+              workspace: agent.workspace || null,
+              createdAt: now,
+              updatedAt: now,
+            }))
+          )
+          .run();
       }
     });
 
-    return NextResponse.json({
-      success: true,
-      count: list.length,
-    });
+    return NextResponse.json({ success: true, count: list.length });
   } catch (error) {
-    console.error("Error syncing agents:", error);
+    console.error("[agents/sync] Error:", error);
     return NextResponse.json(
-      { error: "Failed to sync agents", status: 500 },
+      { error: "Failed to sync agents" },
       { status: 500 }
     );
   }
 }
-
