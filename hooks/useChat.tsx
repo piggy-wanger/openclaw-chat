@@ -151,12 +151,13 @@ async function syncMessagesToSQLite(
         contentStr = String(rawContent ?? "");
       }
 
+      const msgRunId = (msg.runId as string) || undefined;
       syncMessages.push({
-        id: (msg.id as string) || `msg-${nanoid()}`,
+        id: msgRunId ? `msg-${role}-${msgRunId}` : ((msg.id as string) || `msg-${nanoid()}`),
         role: (msg.role as string) || "user",
         content: contentStr,
         toolCalls: msg.toolCalls ? JSON.stringify(msg.toolCalls) : undefined,
-        runId: msg.runId as string | undefined,
+        runId: msgRunId,
         createdAt: (msg.createdAt as number) || Date.now(),
       });
     }
@@ -285,10 +286,9 @@ export function ChatProvider({
 
       setError(null);
 
-      const userMsgId = `msg-user-${nanoid()}`;
       const createdAt = Date.now();
       const tempUserMessage: Message = {
-        id: userMsgId,
+        id: `temp-user-${nanoid()}`,
         sessionId,
         role: "user",
         content: content.trim(),
@@ -308,12 +308,18 @@ export function ChatProvider({
         });
         currentRunIdRef.current = result.runId;
 
-        // 发送成功后，持久化 user 消息到 SQLite
+        // 发送成功后，持久化 user 消息到 SQLite（用 runId 做唯一标识）
+        const userMsgId = `msg-user-${result.runId}`;
+        // 更新内存中的消息 ID
+        setMessagesWithCache((prev) =>
+          prev.map((m) => (m.id === tempUserMessage.id ? { ...m, id: userMsgId } : m))
+        );
         await saveMessageToSQLite({
           id: userMsgId,
           sessionId,
           role: "user",
           content: content.trim(),
+          runId: result.runId,
           createdAt,
         });
       } catch (err) {
@@ -370,7 +376,7 @@ export function ChatProvider({
         case "final": {
           const rawMessage = event.message;
           let finalUsed = false;
-          let assistantMsgId = `msg-final-${nanoid()}`;
+          let assistantMsgId = `msg-final-${event.runId || nanoid()}`;
           let assistantContent: string | ContentBlock[] = "";
           let assistantToolCalls: ToolCall[] | undefined;
 
