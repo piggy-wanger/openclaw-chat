@@ -34,25 +34,32 @@ export async function POST(
     const defaultModel = body.defaultModel ?? "";
     const now = Date.now();
 
-    db.transaction((tx) => {
-      tx.delete(agents).run();
-      if (list.length > 0) {
-        tx.insert(agents)
-          .values(
-            list.map((agent) => ({
-              id: agent.id,
-              name: agent.identity?.name || agent.id,
-              model: agent.model || defaultModel || null,
-              emoji: agent.identity?.emoji || null,
-              avatar: agent.identity?.avatar || null,
-              workspace: agent.workspace || null,
-              createdAt: now,
-              updatedAt: now,
-            }))
-          )
-          .run();
-      }
-    });
+    for (const agent of list) {
+      if (!agent?.id) continue;
+      db.insert(agents)
+        .values({
+          id: agent.id,
+          name: agent.identity?.name || agent.id,
+          model: agent.model || defaultModel || null,
+          emoji: agent.identity?.emoji || null,
+          avatar: agent.identity?.avatar || null,
+          workspace: agent.workspace || null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: agents.id,
+          set: {
+            name: agent.identity?.name || agent.id,
+            model: agent.model || defaultModel || null,
+            emoji: agent.identity?.emoji || null,
+            avatar: agent.identity?.avatar || null,
+            workspace: agent.workspace || null,
+            updatedAt: now,
+          },
+        })
+        .run();
+    }
 
     return NextResponse.json({ success: true, count: list.length });
   } catch (error) {

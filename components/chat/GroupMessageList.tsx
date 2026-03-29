@@ -221,6 +221,7 @@ function GroupMessageListInner({
             key={message.id}
             message={message}
             isOnline={message.senderId ? (membersOnline.get(message.senderId) ?? true) : true}
+            agentEmoji={message.senderId ? (memberMap.get(message.senderId)?.emoji ?? null) : null}
           />
         ))}
 

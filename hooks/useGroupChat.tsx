@@ -560,6 +560,7 @@ export function GroupChatProvider({
       if (!groupId || !isConnected) return;
       const trimmed = content.trim();
       if (!trimmed) return;
+      const userSourceRunId = `user-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
       try {
         await fetch(`/api/groups/${groupId}/messages`, {
@@ -601,6 +602,8 @@ export function GroupChatProvider({
       await dispatchToAgents({
         message: finalMessage,
         targetMembers,
+        sourceRunId: userSourceRunId,
+        sourceAgentId: "user",
       });
     },
     [dispatchToAgents, fetchMessages, groupId, isConnected]

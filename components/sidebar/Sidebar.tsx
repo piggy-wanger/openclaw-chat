@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback, forwardRef, useImperativeHandle, useState } from "react";
+import { useRef, useCallback, forwardRef, useImperativeHandle, useState, useEffect } from "react";
 import { Plus, Settings, MessageSquare, Users } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,11 @@ import { NewSessionDialog } from "@/components/dialogs/NewSessionDialog";
 import { CreateGroupDialog } from "@/components/dialogs/CreateGroupDialog";
 import type { Session } from "@/lib/types";
 import type { GatewayClient } from "@/lib/gateway-client";
+
+const SIDEBAR_STORAGE_KEY = "openclaw.sidebar.width";
+const DEFAULT_WIDTH = 300;
+const MIN_WIDTH = 220;
+const MAX_WIDTH = 480;
 
 export type SidebarRef = {
   focusSearch: () => void;
@@ -56,6 +61,45 @@ export const Sidebar = forwardRef<SidebarRef, SidebarProps>(
     const [showNewSessionDialog, setShowNewSessionDialog] = useState(false);
     const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
 
+    const [width, setWidth] = useState(DEFAULT_WIDTH);
+    const isDragging = useRef(false);
+
+    useEffect(() => {
+      const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+      if (stored) {
+        const n = parseInt(stored, 10);
+        if (n >= MIN_WIDTH && n <= MAX_WIDTH) setWidth(n);
+      }
+    }, []);
+
+    const handleMouseDown = useCallback((e: React.MouseEvent) => {
+      e.preventDefault();
+      isDragging.current = true;
+      const startX = e.clientX;
+      const startWidth = width;
+
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!isDragging.current) return;
+        const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + ev.clientX - startX));
+        setWidth(newWidth);
+      };
+      const onMouseUp = () => {
+        isDragging.current = false;
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        setWidth((w) => {
+          localStorage.setItem(SIDEBAR_STORAGE_KEY, String(w));
+          return w;
+        });
+      };
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    }, [width]);
+
     const focusSearch = useCallback(() => {
       searchInputRef.current?.focus();
     }, []);
@@ -83,7 +127,7 @@ export const Sidebar = forwardRef<SidebarRef, SidebarProps>(
     );
 
     return (
-      <aside className="w-[280px] h-full flex flex-col bg-card border-r border-border">
+      <aside className="h-full flex flex-col bg-card border-r border-border relative shrink-0" style={{ width }}>
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-4 border-b border-border">
           <MessageSquare className="h-6 w-6 text-primary" />
@@ -146,9 +190,13 @@ export const Sidebar = forwardRef<SidebarRef, SidebarProps>(
         <CreateGroupDialog
           open={showCreateGroupDialog}
           onOpenChange={setShowCreateGroupDialog}
-          client={client}
-          isConnected={isConnected}
           onCreateGroup={handleCreateGroup}
+        />
+
+        {/* Resize handle */}
+        <div
+          onMouseDown={handleMouseDown}
+          className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors z-10"
         />
       </aside>
     );

@@ -14,28 +14,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { GatewayClient } from "@/lib/gateway-client";
-
-// Agent 类型定义
-type AgentIdentity = {
-  name: string;
-  emoji?: string;
-  avatar?: string;
-};
-
-type Agent = {
+type AgentRow = {
   id: string;
-  identity: AgentIdentity;
-  model: string;
-  workspace?: string;
-  bindings?: Record<string, unknown>;
+  name: string | null;
+  model: string | null;
+  emoji: string | null;
+  avatar: string | null;
+  workspace: string | null;
 };
 
 type CreateGroupDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  client: GatewayClient | null;
-  isConnected: boolean;
   onCreateGroup: (options: {
     groupName: string;
     agentIds: string[];
@@ -45,32 +35,25 @@ type CreateGroupDialogProps = {
 export function CreateGroupDialog({
   open,
   onOpenChange,
-  client,
-  isConnected,
   onCreateGroup,
 }: CreateGroupDialogProps) {
   const [groupName, setGroupName] = useState("");
   const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agents, setAgents] = useState<AgentRow[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
 
-  // Load agents from config
+  // Load agents from SQLite
   useEffect(() => {
-    if (!open || !isConnected || !client) return;
+    if (!open) return;
 
     let cancelled = false;
     const loadAgents = async () => {
-      if (cancelled) return;
       try {
-        const result = await client.configGet();
+        const res = await fetch("/api/agents");
         if (cancelled) return;
-        const config = result.config as {
-          agents?: {
-            list?: Agent[];
-            default?: string;
-          };
-        };
-        setAgents(config?.agents?.list || []);
+        if (!res.ok) throw new Error(`${res.status}`);
+        const data = await res.json() as { agents: AgentRow[] };
+        setAgents(data.agents || []);
       } catch (err) {
         if (cancelled) return;
         console.error("Failed to load agents:", err);
@@ -83,7 +66,7 @@ export function CreateGroupDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, isConnected, client]);
+  }, [open]);
 
   // Toggle agent selection
   const toggleAgent = (agentId: string) => {
@@ -185,11 +168,9 @@ export function CreateGroupDialog({
                             {isSelected && <Check className="h-3 w-3" />}
                           </div>
                           <span className="flex items-center gap-2">
-                            {agent.identity?.emoji && (
-                              <span>{agent.identity.emoji}</span>
-                            )}
+                            {agent.emoji && <span>{agent.emoji}</span>}
                             <span className="text-sm">
-                              {agent.identity?.name || agent.id}
+                              {agent.name || agent.id}
                             </span>
                           </span>
                         </button>
@@ -210,7 +191,7 @@ export function CreateGroupDialog({
                       variant="secondary"
                       className="text-xs"
                     >
-                      {agent?.identity?.emoji} {agent?.identity?.name || agentId}
+                      {agent?.emoji} {agent?.name || agentId}
                     </Badge>
                   );
                 })}

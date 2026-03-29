@@ -12,6 +12,7 @@ import type { GroupMessage, ToolCall, ToolCallStatus } from "@/lib/types";
 type GroupMessageItemProps = {
   message: GroupMessage;
   isOnline?: boolean;
+  agentEmoji?: string | null;
 };
 
 function parseToolCalls(raw: string | null | undefined): ToolCall[] {
@@ -102,7 +103,7 @@ function parseToolCalls(raw: string | null | undefined): ToolCall[] {
   }
 }
 
-function GroupMessageItemInner({ message, isOnline = true }: GroupMessageItemProps) {
+function GroupMessageItemInner({ message, isOnline = true, agentEmoji }: GroupMessageItemProps) {
   const timestamp = format(new Date(message.createdAt), "HH:mm");
 
   const senderKey = message.senderId || message.senderName || "agent";
@@ -132,8 +133,8 @@ function GroupMessageItemInner({ message, isOnline = true }: GroupMessageItemPro
         <div className="flex items-center gap-2 mb-1">
           <Avatar size="sm">
             <AvatarFallback>
-              {message.senderEmoji ? (
-                <span>{message.senderEmoji}</span>
+              {(agentEmoji || message.senderEmoji) ? (
+                <span>{agentEmoji || message.senderEmoji}</span>
               ) : (
                 <Bot className="h-3.5 w-3.5" />
               )}
@@ -141,7 +142,7 @@ function GroupMessageItemInner({ message, isOnline = true }: GroupMessageItemPro
           </Avatar>
           {isOnline && (
             <span
-              className="w-2 h-2 rounded-full bg-chart-2 -ml-2.5 border border-background shrink-0"
+              className="w-2 h-2 rounded-full bg-chart-2 -ml-1 border border-background shrink-0"
               title="在线"
             />
           )}

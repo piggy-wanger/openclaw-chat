@@ -22,19 +22,13 @@ import {
 import type { GatewayClient } from "@/lib/gateway-client";
 import type { GatewayModel } from "@/lib/gateway-types";
 
-// Agent 类型定义
-type AgentIdentity = {
-  name: string;
-  emoji?: string;
-  avatar?: string;
-};
-
-type Agent = {
+type AgentRow = {
   id: string;
-  identity: AgentIdentity;
-  model: string;
-  workspace?: string;
-  bindings?: Record<string, unknown>;
+  name: string | null;
+  model: string | null;
+  emoji: string | null;
+  avatar: string | null;
+  workspace: string | null;
 };
 
 type NewSessionDialogProps = {
@@ -61,34 +55,25 @@ export function NewSessionDialog({
   const [sessionName, setSessionName] = useState("");
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agents, setAgents] = useState<AgentRow[]>([]);
   const [models, setModels] = useState<GatewayModel[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
 
-  // Load agents from config
+  // Load agents from SQLite
   useEffect(() => {
-    if (!open || !isConnected || !client) return;
+    if (!open) return;
 
     let cancelled = false;
     const loadAgents = async () => {
-      if (cancelled) return;
       try {
-        const result = await client.configGet();
+        const res = await fetch("/api/agents");
         if (cancelled) return;
-        const config = result.config as {
-          agents?: {
-            list?: Agent[];
-            default?: string;
-          };
-        };
-        const agentList = config?.agents?.list || [];
+        if (!res.ok) throw new Error(`${res.status}`);
+        const data = await res.json() as { agents: AgentRow[] };
+        const agentList = data.agents || [];
         setAgents(agentList);
-        // Set default agent if available
-        const defaultAgentId = config?.agents?.default;
-        if (defaultAgentId && agentList.some((a) => a.id === defaultAgentId)) {
-          setSelectedAgentId(defaultAgentId);
-        } else if (agentList.length > 0) {
+        if (agentList.length > 0 && !agentList.some((a) => a.id === selectedAgentId)) {
           setSelectedAgentId(agentList[0].id);
         }
       } catch (err) {
@@ -103,7 +88,8 @@ export function NewSessionDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, isConnected, client]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Load models from Gateway
   useEffect(() => {
@@ -135,14 +121,12 @@ export function NewSessionDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isConnected, client]);
 
-  // When agent changes, update the selected model based on agent's default model
   useEffect(() => {
     if (selectedAgentId && agents.length > 0) {
       const agent = agents.find((a) => a.id === selectedAgentId);
       if (agent?.model && agent.model !== selectedModel) {
-        // Use queueMicrotask to defer state update outside the effect
         queueMicrotask(() => {
-          setSelectedModel(agent.model);
+          setSelectedModel(agent.model!);
         });
       }
     }
@@ -267,10 +251,8 @@ export function NewSessionDialog({
                     agents.map((agent) => (
                       <SelectItem key={agent.id} value={agent.id}>
                         <span className="flex items-center gap-2">
-                          {agent.identity?.emoji && (
-                            <span>{agent.identity.emoji}</span>
-                          )}
-                          <span>{agent.identity?.name || agent.id}</span>
+                          {agent.emoji && <span>{agent.emoji}</span>}
+                          <span>{agent.name || agent.id}</span>
                         </span>
                       </SelectItem>
                     ))

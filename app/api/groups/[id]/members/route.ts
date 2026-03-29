@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db, groups, groupMembers } from "@/db";
+import { db, groups, groupMembers, agents } from "@/db";
 import { and, asc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { ErrorResponse } from "@/lib/types";
@@ -79,11 +79,35 @@ export async function GET(
       );
     }
 
-    const members = await db
-      .select()
+    const rows = await db
+      .select({
+        id: groupMembers.id,
+        groupId: groupMembers.groupId,
+        agentId: groupMembers.agentId,
+        name: groupMembers.name,
+        emoji: groupMembers.emoji,
+        sessionKey: groupMembers.sessionKey,
+        role: groupMembers.role,
+        order: groupMembers.order,
+        createdAt: groupMembers.createdAt,
+        agentEmoji: agents.emoji,
+      })
       .from(groupMembers)
+      .leftJoin(agents, eq(groupMembers.agentId, agents.id))
       .where(eq(groupMembers.groupId, id))
       .orderBy(asc(groupMembers.order), asc(groupMembers.createdAt));
+
+    const members = rows.map((row) => ({
+      id: row.id,
+      groupId: row.groupId,
+      agentId: row.agentId,
+      name: row.name,
+      emoji: row.agentEmoji ?? row.emoji,
+      sessionKey: row.sessionKey,
+      role: row.role,
+      order: row.order,
+      createdAt: row.createdAt,
+    }));
 
     return NextResponse.json({ members });
   } catch (error) {
